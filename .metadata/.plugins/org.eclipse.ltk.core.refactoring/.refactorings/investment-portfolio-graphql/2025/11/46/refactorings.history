@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<session version="1.0">
+<refactoring comment="Rename resource &apos;investment-portfolio-graphql/test-capitulo-01.sh&apos; to &apos;test-chapter01.sh&apos;" description="Rename resource &apos;test-capitulo-01.sh&apos;" flags="7" id="org.eclipse.ltk.core.refactoring.rename.resource" input="test-capitulo-01.sh" name="test-chapter01.sh" stamp="1763245302816" updateReferences="true"/>
+</session>

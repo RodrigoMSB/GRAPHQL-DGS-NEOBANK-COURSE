@@ -1,0 +1,50 @@
+spring:
+  application:
+    name: investment-portfolio-graphql
+  
+  # GraphQL Configuration
+  graphql:
+    # GraphiQL UI habilitado para testing
+    graphiql:
+      enabled: true
+      path: /graphiql
+    
+    # Path del endpoint GraphQL
+    path: /graphql
+    
+    # Schema location
+    schema:
+      locations: classpath:graphql/
+      file-extensions: .graphqls
+    
+    # Introspection habilitada (para desarrollo)
+    schema:
+      introspection:
+        enabled: true
+
+# Server Configuration
+server:
+  port: 8080
+  
+  servlet:
+    context-path: /
+
+# Logging
+logging:
+  level:
+    root: INFO
+    com.neobank.portfolio: DEBUG
+    org.springframework.graphql: DEBUG
+    org.springframework.web: INFO
+
+# Security (JWT)
+jwt:
+  secret: "neobank-graphql-course-secret-key-change-in-production"
+  expiration: 86400000 # 24 horas en milisegundos
+
+# Application Info
+info:
+  app:
+    name: Investment Portfolio GraphQL
+    description: Chapter 1 - GraphQL Fundamentals
+    version: 1.0.0

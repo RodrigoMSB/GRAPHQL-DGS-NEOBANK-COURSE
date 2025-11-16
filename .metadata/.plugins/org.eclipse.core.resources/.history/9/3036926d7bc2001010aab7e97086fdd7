@@ -1,0 +1,335 @@
+# 🚀 POSTMAN COLLECTION - GUÍA DE USO
+
+**GraphQL DGS NeoBank Course - Chapter 01**
+
+---
+
+## 📥 IMPORTAR EN POSTMAN
+
+### Paso 1: Importar Collection
+
+1. Abre Postman
+2. Click en **Import** (esquina superior izquierda)
+3. Arrastra el archivo `CHAPTER_01.postman_collection.json`
+4. Click **Import**
+
+### Paso 2: Importar Environment
+
+1. Click en **Import** nuevamente
+2. Arrastra el archivo `GraphQL-NeoBank-Course.postman_environment.json`
+3. Click **Import**
+
+### Paso 3: Activar Environment
+
+1. En la esquina superior derecha, selecciona el dropdown de environments
+2. Selecciona **GraphQL-DGS-NeoBank-Course**
+3. ✅ Listo, todas las variables están configuradas
+
+---
+
+## 🎯 ESTRUCTURA DE LA COLLECTION
+
+```
+CHAPTER 01: GraphQL Fundamentals
+│
+├── 📁 Section 1.1 - REST vs GraphQL (7 tests)
+│   ├── 1.1.1 - REST: Overfetching
+│   ├── 1.1.2 - GraphQL: Only Names
+│   ├── 1.1.3a/b/c - REST: 3 Calls (Underfetching)
+│   ├── 1.1.4 - GraphQL: One Call
+│   └── 1.1.5 - GraphQL: Single Endpoint
+│
+├── 📁 Section 1.2 - Components & Base Language (9 tests)
+│   ├── 1.2.1 - Schema: Portfolio Type
+│   ├── 1.2.2a/b/c - Queries (simple, with args, search)
+│   ├── 1.2.3a/b/c - Mutations (create, add, remove)
+│   ├── 1.2.4 - Enum: AssetType
+│   └── 1.2.5 - Resolvers
+│
+├── 📁 Section 1.3 - Nested Queries & Variables (5 tests)
+│   ├── 1.3.1 - Nesting Level 1
+│   ├── 1.3.2 - Nesting Level 2
+│   ├── 1.3.3 - Query with Variables
+│   ├── 1.3.4 - Variable Validation
+│   └── 1.3.5 - Multiple Relations
+│
+├── 📁 Section 1.4 - Filters, Sorting & Pagination (7 tests)
+│   ├── 1.4.1 - Filter: Only STOCKS
+│   ├── 1.4.2 - Filter: Value > $5000
+│   ├── 1.4.3 - Sort: By Value DESC
+│   ├── 1.4.4 - Sort: By Profit
+│   ├── 1.4.5 - Pagination: First Page
+│   ├── 1.4.6 - Complex Query (all combined)
+│   └── 1.4.7 - Reasonable Limit
+│
+└── 📁 Section 1.5 - Typing, Nullability & Security (6 tests)
+    ├── 1.5.1 - Type Validation: Float!
+    ├── 1.5.2 - Non-Nullable Fields
+    ├── 1.5.3 - Enum Validation
+    ├── 1.5.4 - Introspection
+    ├── 1.5.5 - Validation Error
+    └── 1.5.6 - Response Structure
+```
+
+**Total: 34 requests** (mapean 1:1 con los 34 tests del script bash)
+
+---
+
+## ▶️ CÓMO USAR
+
+### Opción 1: Ejecutar Request Individual
+
+1. Click en cualquier request de la lista
+2. Click en **Send**
+3. Ver la respuesta en el panel inferior
+4. Los **Tests** se ejecutan automáticamente y muestran ✅ o ❌
+
+### Opción 2: Ejecutar Toda una Sección
+
+1. Click derecho en una carpeta (ej: "Section 1.1")
+2. Click en **Run folder**
+3. Se abre el Collection Runner
+4. Click **Run** para ejecutar todos los tests de esa sección
+
+### Opción 3: Ejecutar TODOS los Tests (34)
+
+1. Click derecho en la collection raíz "CHAPTER 01"
+2. Click en **Run collection**
+3. Postman ejecuta los 34 tests en secuencia
+4. Ver resultados: X/34 passed
+
+---
+
+## 🔧 VARIABLES DE ENTORNO
+
+La collection usa estas variables (ya configuradas):
+
+| Variable | Valor | Descripción |
+|----------|-------|-------------|
+| `BASE_URL` | `http://localhost:8080` | URL base del servidor |
+| `GRAPHQL_ENDPOINT` | `{{BASE_URL}}/graphql` | Endpoint GraphQL |
+| `REST_ENDPOINT` | `{{BASE_URL}}/api/rest` | Endpoint REST |
+| `CREATED_PORTFOLIO_ID` | (vacío) | Se llena automáticamente |
+
+**⚠️ IMPORTANTE:** Asegúrate de tener el servidor corriendo:
+```bash
+mvn spring-boot:run
+```
+
+---
+
+## 💡 FEATURES ESPECIALES
+
+### 1. Tests Automáticos
+
+Cada request tiene **tests automáticos** que validan:
+- Status code 200
+- Campos esperados en la respuesta
+- Tipos de datos correctos
+- Validaciones de negocio
+
+**Ver tests:**
+1. Click en un request
+2. Ve a la pestaña **Tests**
+3. Verás el código JavaScript que valida la respuesta
+
+### 2. Variables Dinámicas
+
+Algunos requests **guardan valores** para usar en otros:
+
+**Ejemplo:**
+- Request `1.2.3a - createPortfolio` crea un portfolio y guarda el ID
+- Request `1.2.3b - addAsset` usa ese ID automáticamente
+
+**Implementación:**
+```javascript
+// En el test del request 1.2.3a:
+pm.environment.set("CREATED_PORTFOLIO_ID", jsonData.data.createPortfolio.portfolio.id);
+
+// En el body del request 1.2.3b:
+"portfolioId": "{{CREATED_PORTFOLIO_ID}}"
+```
+
+### 3. Documentación Inline
+
+Cada request tiene **descripción** que explica:
+- Qué hace el request
+- Qué concepto enseña
+- Por qué es importante
+
+**Ver documentación:**
+- Click en un request
+- Lee el panel derecho con la descripción
+
+---
+
+## 🎓 USO EN CLASE
+
+### Para el Instructor:
+
+**Modo Demo (proyectado):**
+1. Abre Postman en pantalla completa
+2. Ejecuta requests uno por uno
+3. Explica el concepto mientras se ejecuta
+4. Muestra la respuesta y los tests pasando
+
+**Modo Comparación:**
+1. Ejecuta request REST (ej: 1.1.1)
+2. Muestra la respuesta gigante (overfetching)
+3. Ejecuta request GraphQL (ej: 1.1.2)
+4. Muestra la respuesta pequeña
+5. Contrasta visualmente
+
+### Para el Alumno:
+
+**Modo Exploración:**
+1. Importa la collection
+2. Ejecuta cada request
+3. Modifica las queries (cambia campos)
+4. Observa cómo cambian las respuestas
+5. Experimenta con variables
+
+**Modo Práctica:**
+1. Crea tus propios requests
+2. Usa la collection como referencia
+3. Valida con los tests automáticos
+
+---
+
+## 🧪 EJECUTAR TODOS LOS TESTS
+
+### Usando Collection Runner:
+
+1. Click en la collection "CHAPTER 01"
+2. Click en **Run**
+3. Configura:
+   - ✅ Save responses
+   - ✅ Keep variable values
+   - Iterations: 1
+4. Click **Run CHAPTER 01**
+5. Espera ~30 segundos
+6. Ver resultados: **34/34 passed** ✅
+
+### Usando Newman (CLI):
+
+```bash
+# Instalar Newman
+npm install -g newman
+
+# Ejecutar collection
+newman run CHAPTER_01.postman_collection.json \
+  -e GraphQL-NeoBank-Course.postman_environment.json
+
+# Con reporte HTML
+newman run CHAPTER_01.postman_collection.json \
+  -e GraphQL-NeoBank-Course.postman_environment.json \
+  -r html
+```
+
+---
+
+## 🔍 TROUBLESHOOTING
+
+### Problema: Tests fallan con "Error: connect ECONNREFUSED"
+
+**Solución:** El servidor NO está corriendo.
+```bash
+# Inicia el servidor
+cd CHAPTER_01/investment-portfolio-graphql
+mvn spring-boot:run
+```
+
+### Problema: Variable CREATED_PORTFOLIO_ID está vacía
+
+**Solución:** Ejecuta los requests en orden.
+1. Primero ejecuta `1.2.3a - createPortfolio`
+2. Luego ejecuta `1.2.3b - addAsset`
+
+### Problema: "This request does not have any tests"
+
+**Solución:** Revisa que importaste la collection correcta. Debe tener 34 requests con tests.
+
+### Problema: Postman dice "Could not get any response"
+
+**Soluciones:**
+1. Verifica que el servidor está corriendo en puerto 8080
+2. Prueba abrir `http://localhost:8080` en el navegador
+3. Revisa que no haya firewall bloqueando
+
+---
+
+## 📊 COMPARACIÓN: Script .sh vs Postman
+
+| Aspecto | Script .sh | Postman Collection |
+|---------|------------|-------------------|
+| **Ejecución** | Terminal | UI Visual |
+| **Velocidad** | Rápido (34 tests en 30s) | Similar |
+| **Interactivo** | Modo pausas | Click & explore |
+| **Modificar queries** | Editar .sh | Click & edit |
+| **Tests** | grep en bash | JavaScript assertions |
+| **CI/CD** | ✅ Perfecto | ✅ Newman CLI |
+| **Aprendizaje** | Para devs avanzados | Para todos |
+| **Documentación** | Comentarios | UI + descripciones |
+
+**Recomendación:** Usa **AMBOS**
+- `.sh` → Validación rápida, CI/CD, clase demo
+- Postman → Exploración, práctica, debugging
+
+---
+
+## 🎯 PRÓXIMOS PASOS
+
+### Para continuar el curso:
+
+1. **Ejecuta todos los tests** para validar Chapter 01
+2. **Experimenta** modificando queries
+3. **Guarda la collection** para referencia futura
+4. **Espera Chapter 02** (usará el mismo environment)
+
+### Para profundizar:
+
+1. **Modifica requests** para aprender
+2. **Crea nuevos requests** basados en el schema
+3. **Combina queries** de diferentes secciones
+4. **Exporta responses** como ejemplos
+
+---
+
+## 📚 RECURSOS ADICIONALES
+
+### GraphQL en Postman:
+- [Postman GraphQL Docs](https://learning.postman.com/docs/sending-requests/graphql/graphql-overview/)
+- [GraphQL Variables](https://learning.postman.com/docs/sending-requests/graphql/graphql-variables/)
+
+### Collection Runner:
+- [Running Collections](https://learning.postman.com/docs/collections/running-collections/intro-to-collection-runs/)
+- [Writing Tests](https://learning.postman.com/docs/writing-scripts/test-scripts/)
+
+### Newman CLI:
+- [Newman Documentation](https://learning.postman.com/docs/collections/using-newman-cli/command-line-integration-with-newman/)
+
+---
+
+## ✨ FEATURES PRÓXIMAS (Chapters 2-8)
+
+Cada chapter tendrá su propia collection que usará **el mismo environment**:
+
+```
+Collections (una por chapter):
+├── CHAPTER_01.postman_collection.json ✅
+├── CHAPTER_02.postman_collection.json (próximamente)
+├── CHAPTER_03.postman_collection.json (próximamente)
+└── ...
+
+Environment (uno para TODOS):
+└── GraphQL-NeoBank-Course.postman_environment.json ✅
+```
+
+**Solo necesitas:**
+1. Importar la nueva collection
+2. Cambiar de proyecto con `mvn spring-boot:run`
+3. ¡El environment sigue funcionando!
+
+---
+
+**¡Disfruta explorando GraphQL con Postman!** 🚀🔥

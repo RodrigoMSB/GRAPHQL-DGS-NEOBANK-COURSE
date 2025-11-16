@@ -1,0 +1,5 @@
+package com.neobank.portfolio.security;
+
+public class SecurityConfig {
+
+}
