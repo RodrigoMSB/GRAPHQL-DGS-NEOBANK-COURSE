@@ -10,6 +10,7 @@
 
 - **[📖 TEORÍA COMPLETA](DOCUMENTACION/TEORIA.md)** - Conceptos detallados de cada sección
 - **[🚀 GUÍA POSTMAN](DOCUMENTACION/POSTMAN_GUIDE.md)** - Cómo usar la collection de Postman
+- **[🎨 DIAGRAMAS](DOCUMENTACION/DIAGRAMAS/)** - Diagramas visuales del schema y arquitectura
 
 ---
 
