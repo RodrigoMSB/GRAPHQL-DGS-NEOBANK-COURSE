@@ -1,0 +1,1448 @@
+{
+	"info": {
+		"_postman_id": "ch02-schema-design",
+		"name": "CHAPTER 02: Schema Design - Cashback Rewards",
+		"description": "Complete test suite for Chapter 02 - Correct Schema Design & Best Practices\n\n**Covers:**\n- Section 2.1: Schema Design Principles (6 tests)\n- Section 2.2: Scalars, Objects, Lists & Inputs (8 tests)\n- Section 2.3: Complex Queries & Mutations (10 tests)\n- Bonus: Extra Design Validations (6 tests)\n\n**Total: 30 automated tests**\n\n**Feature:** Cashback Rewards Program\n**Stack:** Spring Boot 3.4.5 + GraphQL Java 24.x\n\nMake sure the server is running: `mvn spring-boot:run`",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "Section 2.1 - Schema Design Principles",
+			"item": [
+				{
+					"name": "2.1.1 - Domain-Driven Design (User with fullName)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test(\"User has domain fields (fullName, not first_name/last_name)\", function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData.data.user).to.have.property('fullName');",
+									"    pm.expect(jsonData.data.user.fullName).to.eql('Maria Silva');",
+									"});",
+									"",
+									"pm.test(\"User has tier enum (not tier_id FK)\", function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData.data.user).to.have.property('tier');",
+									"    pm.expect(jsonData.data.user.tier).to.be.oneOf(['BRONZE', 'SILVER', 'GOLD', 'PLATINUM']);",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "graphql",
+							"graphql": {
+								"query": "{\n  user(id: \"user-001\") {\n    id\n    fullName\n    tier\n    email\n  }\n}",
+								"variables": ""
+							}
+						},
+						"url": {
+							"raw": "{{GRAPHQL_ENDPOINT}}",
+							"host": ["{{GRAPHQL_ENDPOINT}}"]
+						},
+						"description": "**Schema Design Principle: Domain-Driven**\n\nThe schema is oriented to the business domain, not the database structure.\n\n- `fullName` (domain concept) instead of `first_name + last_name` (DB fields)\n- `tier: CashbackTier!` (enum) instead of `tier_id: Int` (FK)\n\nThis decouples the API from database implementation details."
+					},
+					"response": []
+				},
+				{
+					"name": "2.1.2 - Well-Designed Enums (CashbackTier)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test(\"User has PLATINUM tier\", function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData.data.user.tier).to.eql('PLATINUM');",
+									"});",
+									"",
+									"pm.test(\"Tier is a valid enum value\", function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(['BRONZE', 'SILVER', 'GOLD', 'PLATINUM']).to.include(jsonData.data.user.tier);",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "graphql",
+							"graphql": {
+								"query": "{\n  user(id: \"user-002\") {\n    tier\n  }\n}",
+								"variables": ""
+							}
+						},
+						"url": {
+							"raw": "{{GRAPHQL_ENDPOINT}}",
+							"host": ["{{GRAPHQL_ENDPOINT}}"]
+						},
+						"description": "**Well-Designed Enum**\n\nCashbackTier enum provides:\n- Auto-validation (only valid values accepted)\n- Self-documentation\n- Type safety\n\nValues: BRONZE (1%), SILVER (2%), GOLD (3%), PLATINUM (5%)"
+					},
+					"response": []
+				},
+				{
+					"name": "2.1.3 - Bidirectional Relationships (Transaction → User)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test(\"Transaction has navigable relationship to User\", function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData.data.transaction).to.have.property('user');",
+									"    pm.expect(jsonData.data.transaction.user).to.have.property('fullName');",
+									"    pm.expect(jsonData.data.transaction.user).to.have.property('tier');",
+									"});",
+									"",
+									"pm.test(\"User data is correct\", function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData.data.transaction.user.fullName).to.eql('Maria Silva');",
+									"    pm.expect(jsonData.data.transaction.user.tier).to.eql('GOLD');",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "graphql",
+							"graphql": {
+								"query": "{\n  transaction(id: \"trans-001\") {\n    merchantName\n    user {\n      fullName\n      tier\n    }\n  }\n}",
+								"variables": ""
+							}
+						},
+						"url": {
+							"raw": "{{GRAPHQL_ENDPOINT}}",
+							"host": ["{{GRAPHQL_ENDPOINT}}"]
+						},
+						"description": "**Bidirectional Relationships**\n\nThe schema allows navigation in both directions:\n- User → Transactions (one-to-many)\n- Transaction → User (many-to-one)\n\nNo need to expose userId FK - GraphQL resolves the relationship."
+					},
+					"response": []
+				},
+				{
+					"name": "2.1.4 - Calculated Fields (availableCashback)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test(\"User has calculated field availableCashback\", function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData.data.user).to.have.property('availableCashback');",
+									"    pm.expect(jsonData.data.user.availableCashback).to.be.a('number');",
+									"    pm.expect(jsonData.data.user.availableCashback).to.be.above(0);",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "graphql",
+							"graphql": {
+								"query": "{\n  user(id: \"user-001\") {\n    availableCashback\n  }\n}",
+								"variables": ""
+							}
+						},
+						"url": {
+							"raw": "{{GRAPHQL_ENDPOINT}}",
+							"host": ["{{GRAPHQL_ENDPOINT}}"]
+						},
+						"description": "**Calculated Fields**\n\n`availableCashback` is NOT stored in the database. It's calculated on-the-fly by summing all rewards with status AVAILABLE.\n\nThis demonstrates schema independence from DB structure."
+					},
+					"response": []
+				},
+				{
+					"name": "2.1.5 - Domain Entities (User, Transaction, Reward)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test(\"User entity has all domain fields\", function () {",
+									"    var jsonData = pm.response.json();",
+									"    var user = jsonData.data.user;",
+									"    pm.expect(user).to.have.all.keys('id', 'fullName', 'tier', 'email', 'enrolledAt');",
+									"});",
+									"",
+									"pm.test(\"All fields have correct types\", function () {",
+									"    var jsonData = pm.response.json();",
+									"    var user = jsonData.data.user;",
+									"    pm.expect(user.id).to.be.a('string');",
+									"    pm.expect(user.fullName).to.be.a('string');",
+									"    pm.expect(user.tier).to.be.a('string');",
+									"    pm.expect(user.email).to.include('@');",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "graphql",
+							"graphql": {
+								"query": "{\n  user(id: \"user-001\") {\n    id\n    fullName\n    tier\n    email\n    enrolledAt\n  }\n}",
+								"variables": ""
+							}
+						},
+						"url": {
+							"raw": "{{GRAPHQL_ENDPOINT}}",
+							"host": ["{{GRAPHQL_ENDPOINT}}"]
+						},
+						"description": "**Domain Entities Correctly Identified**\n\nThe schema defines clear entities:\n- User (customer in the cashback program)\n- Transaction (purchase that generates cashback)\n- Reward (cashback earned)\n\nEach entity has fields that make sense in the business domain."
+					},
+					"response": []
+				},
+				{
+					"name": "2.1.6 - Schema as Contract (not DB mirror)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test(\"User has domain fields only\", function () {",
+									"    var jsonData = pm.response.json();",
+									"    var user = jsonData.data.user;",
+									"    pm.expect(user).to.have.property('fullName');",
+									"    pm.expect(user).to.have.property('tier');",
+									"    pm.expect(user).to.not.have.property('first_name');",
+									"    pm.expect(user).to.not.have.property('tier_id');",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "graphql",
+							"graphql": {
+								"query": "{\n  user(id: \"user-001\") {\n    fullName\n    tier\n  }\n}",
+								"variables": ""
+							}
+						},
+						"url": {
+							"raw": "{{GRAPHQL_ENDPOINT}}",
+							"host": ["{{GRAPHQL_ENDPOINT}}"]
+						},
+						"description": "**Schema as Contract (not DB structure)**\n\nThe GraphQL schema defines what consumers need, not what the database stores.\n\nThis allows the backend to evolve independently without breaking the API."
+					},
+					"response": []
+				}
+			],
+			"description": "Tests that validate domain-driven schema design principles"
+		},
+		{
+			"name": "Section 2.2 - Scalars, Objects, Lists & Inputs",
+			"item": [
+				{
+					"name": "2.2.1 - Custom Scalar: Money (precision)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test(\"Money scalar has decimal precision\", function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData.data.user.availableCashback).to.be.a('number');",
+									"    pm.expect(jsonData.data.user.totalCashbackEarned).to.be.a('number');",
+									"    // Money uses BigDecimal, not Float (no rounding errors)",
+									"    pm.expect(jsonData.data.user.availableCashback.toString()).to.match(/\\d+\\.\\d+/);",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "graphql",
+							"graphql": {
+								"query": "{\n  user(id: \"user-001\") {\n    availableCashback\n    totalCashbackEarned\n  }\n}",
+								"variables": ""
+							}
+						},
+						"url": {
+							"raw": "{{GRAPHQL_ENDPOINT}}",
+							"host": ["{{GRAPHQL_ENDPOINT}}"]
+						},
+						"description": "**Custom Scalar: Money**\n\nUses BigDecimal instead of Float to avoid rounding errors in financial calculations.\n\nCritical for cashback precision (e.g., 119.88, not 119.87999)"
+					},
+					"response": []
+				},
+				{
+					"name": "2.2.2 - Custom Scalar: Percentage (semantic)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test(\"Percentage scalar is semantically clear\", function () {",
+									"    var jsonData = pm.response.json();",
+									"    var firstTx = jsonData.data.transactions[0];",
+									"    pm.expect(firstTx).to.have.property('cashbackPercentage');",
+									"    pm.expect(firstTx.cashbackPercentage).to.be.a('number');",
+									"    pm.expect(firstTx.cashbackPercentage).to.be.within(0, 100);",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "graphql",
+							"graphql": {
+								"query": "{\n  transactions(userId: \"user-001\") {\n    cashbackPercentage\n  }\n}",
+								"variables": ""
+							}
+						},
+						"url": {
+							"raw": "{{GRAPHQL_ENDPOINT}}",
+							"host": ["{{GRAPHQL_ENDPOINT}}"]
+						},
+						"description": "**Custom Scalar: Percentage**\n\nMakes the API self-documenting. Values are always 0-100, not 0-1.\n\nExample: 9.0 means 9%, not 0.09"
+					},
+					"response": []
+				},
+				{
+					"name": "2.2.3 - Custom Scalar: Email (validation)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test(\"Email scalar has valid format\", function () {",
+									"    var jsonData = pm.response.json();",
+									"    var email = jsonData.data.user.email;",
+									"    pm.expect(email).to.match(/@.*\\.com/);",
+									"    pm.expect(email).to.eql('maria.silva@email.com');",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "graphql",
+							"graphql": {
+								"query": "{\n  user(id: \"user-001\") {\n    email\n  }\n}",
+								"variables": ""
+							}
+						},
+						"url": {
+							"raw": "{{GRAPHQL_ENDPOINT}}",
+							"host": ["{{GRAPHQL_ENDPOINT}}"]
+						},
+						"description": "**Custom Scalar: Email**\n\nProvides automatic validation of email format.\n\nInvalid emails are rejected at the GraphQL layer."
+					},
+					"response": []
+				},
+				{
+					"name": "2.2.4 - Custom Scalar: DateTime (ISO-8601)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test(\"DateTime scalar is ISO-8601 format\", function () {",
+									"    var jsonData = pm.response.json();",
+									"    var enrolledAt = jsonData.data.users[0].enrolledAt;",
+									"    pm.expect(enrolledAt).to.be.a('string');",
+									"    pm.expect(enrolledAt).to.match(/\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}/);",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "graphql",
+							"graphql": {
+								"query": "{\n  users {\n    enrolledAt\n  }\n}",
+								"variables": ""
+							}
+						},
+						"url": {
+							"raw": "{{GRAPHQL_ENDPOINT}}",
+							"host": ["{{GRAPHQL_ENDPOINT}}"]
+						},
+						"description": "**Custom Scalar: DateTime**\n\nUses ISO-8601 format with timezone support.\n\nExample: 2025-05-15T23:58:56.176459"
+					},
+					"response": []
+				},
+				{
+					"name": "2.2.5 - Input Types vs Output Types (CreateTransactionInput)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test(\"Mutation with Input type succeeds\", function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData.data.createTransaction.success).to.be.true;",
+									"});",
+									"",
+									"pm.test(\"Input type is separate from Output type\", function () {",
+									"    var jsonData = pm.response.json();",
+									"    // Input has userId, amount, category, merchantName",
+									"    // Output (Transaction) has id, status, cashbackAmount (calculated)",
+									"    pm.expect(jsonData.data.createTransaction).to.have.property('message');",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "graphql",
+							"graphql": {
+								"query": "mutation {\n  createTransaction(input: {\n    userId: \"user-001\"\n    amount: 100.0\n    category: GROCERIES\n    merchantName: \"Test Store\"\n  }) {\n    success\n    message\n  }\n}",
+								"variables": ""
+							}
+						},
+						"url": {
+							"raw": "{{GRAPHQL_ENDPOINT}}",
+							"host": ["{{GRAPHQL_ENDPOINT}}"]
+						},
+						"description": "**Input Types vs Output Types**\n\nCreateTransactionInput (what client sends) ≠ Transaction (what server returns)\n\nThis separation allows:\n- Different validation rules\n- Independent evolution\n- Clear API boundaries"
+					},
+					"response": []
+				},
+				{
+					"name": "2.2.6 - List Types with Nullability ([Transaction!]!)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test(\"List is non-null\", function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData.data.transactions).to.not.be.null;",
+									"    pm.expect(jsonData.data.transactions).to.be.an('array');",
+									"});",
+									"",
+									"pm.test(\"List elements are non-null\", function () {",
+									"    var jsonData = pm.response.json();",
+									"    jsonData.data.transactions.forEach(tx => {",
+									"        pm.expect(tx).to.not.be.null;",
+									"        pm.expect(tx).to.have.property('id');",
+									"    });",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "graphql",
+							"graphql": {
+								"query": "{\n  transactions(userId: \"user-001\") {\n    id\n  }\n}",
+								"variables": ""
+							}
+						},
+						"url": {
+							"raw": "{{GRAPHQL_ENDPOINT}}",
+							"host": ["{{GRAPHQL_ENDPOINT}}"]
+						},
+						"description": "**List Types with Correct Nullability**\n\n[Transaction!]! means:\n- The list itself is non-null (always returns an array)\n- Each element in the list is non-null (no null transactions)\n\nThis provides strong guarantees to clients."
+					},
+					"response": []
+				},
+				{
+					"name": "2.2.7 - Descriptive Enums (TransactionCategory)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test(\"TransactionCategory is a valid enum\", function () {",
+									"    var jsonData = pm.response.json();",
+									"    var validCategories = ['GROCERIES', 'RESTAURANTS', 'GAS_STATIONS', 'TRAVEL', 'ENTERTAINMENT', 'HEALTH_FITNESS', 'SHOPPING', 'UTILITIES', 'OTHER'];",
+									"    jsonData.data.transactions.forEach(tx => {",
+									"        pm.expect(validCategories).to.include(tx.category);",
+									"    });",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "graphql",
+							"graphql": {
+								"query": "{\n  transactions(category: TRAVEL) {\n    category\n  }\n}",
+								"variables": ""
+							}
+						},
+						"url": {
+							"raw": "{{GRAPHQL_ENDPOINT}}",
+							"host": ["{{GRAPHQL_ENDPOINT}}"]
+						},
+						"description": "**Descriptive Enums**\n\nTransactionCategory enum values are:\n- Self-documenting (TRAVEL, RESTAURANTS, etc.)\n- Auto-validated by GraphQL\n- Used for cashback multipliers"
+					},
+					"response": []
+				},
+				{
+					"name": "2.2.8 - No FK Exposure (User relationship, not userId)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test(\"Transaction has User relationship (not userId FK)\", function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData.data.transaction).to.have.property('user');",
+									"    pm.expect(jsonData.data.transaction.user).to.have.property('fullName');",
+									"    pm.expect(jsonData.data.transaction).to.not.have.property('userId');",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "graphql",
+							"graphql": {
+								"query": "{\n  transaction(id: \"trans-001\") {\n    user {\n      fullName\n    }\n  }\n}",
+								"variables": ""
+							}
+						},
+						"url": {
+							"raw": "{{GRAPHQL_ENDPOINT}}",
+							"host": ["{{GRAPHQL_ENDPOINT}}"]
+						},
+						"description": "**No Foreign Key Exposure**\n\nThe schema exposes relationships as objects, not IDs.\n\nTransaction → User (navigable object)\nNOT: userId → then fetch User separately"
+					},
+					"response": []
+				}
+			],
+			"description": "Tests for custom scalars, type separation, and proper typing"
+		},
+		{
+			"name": "Section 2.3 - Complex Queries & Mutations",
+			"item": [
+				{
+					"name": "2.3.1 - Query with Multiple Filters",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test(\"Query filters work correctly\", function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData.data.transactions).to.be.an('array');",
+									"    jsonData.data.transactions.forEach(tx => {",
+									"        pm.expect(tx.category).to.eql('SHOPPING');",
+									"        pm.expect(tx.status).to.eql('CONFIRMED');",
+									"    });",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "graphql",
+							"graphql": {
+								"query": "{\n  transactions(\n    userId: \"user-002\"\n    status: CONFIRMED\n    category: SHOPPING\n  ) {\n    merchantName\n    category\n    status\n  }\n}",
+								"variables": ""
+							}
+						},
+						"url": {
+							"raw": "{{GRAPHQL_ENDPOINT}}",
+							"host": ["{{GRAPHQL_ENDPOINT}}"]
+						},
+						"description": "**Complex Query with Multiple Filters**\n\nSupports optional parameters:\n- userId: filter by user\n- status: filter by transaction status\n- category: filter by category\n\nAll filters can be combined."
+					},
+					"response": []
+				},
+				{
+					"name": "2.3.2 - Nested Query with Calculated Fields",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test(\"Nested query returns User and Transactions\", function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData.data.user).to.have.property('fullName');",
+									"    pm.expect(jsonData.data.transactions).to.be.an('array');",
+									"});",
+									"",
+									"pm.test(\"Calculated fields are present\", function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData.data.transactions[0]).to.have.property('cashbackAmount');",
+									"    pm.expect(jsonData.data.transactions[0].cashbackAmount).to.be.a('number');",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "graphql",
+							"graphql": {
+								"query": "{\n  user(id: \"user-001\") {\n    fullName\n  }\n  transactions(userId: \"user-001\") {\n    cashbackAmount\n  }\n}",
+								"variables": ""
+							}
+						},
+						"url": {
+							"raw": "{{GRAPHQL_ENDPOINT}}",
+							"host": ["{{GRAPHQL_ENDPOINT}}"]
+						},
+						"description": "**Nested Query with Calculated Fields**\n\nDemonstrates:\n- Multiple root queries in one request\n- Calculated field (cashbackAmount)\n- Efficient data fetching"
+					},
+					"response": []
+				},
+				{
+					"name": "2.3.3 - Calculated Field with Business Logic (cashbackPercentage)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test(\"CashbackPercentage is calculated correctly (GOLD × TRAVEL = 9%)\", function () {",
+									"    var jsonData = pm.response.json();",
+									"    var travelTx = jsonData.data.transactions.find(tx => tx.category === 'TRAVEL');",
+									"    // GOLD tier (3%) × TRAVEL multiplier (3x) = 9%",
+									"    pm.expect(travelTx.cashbackPercentage).to.eql(9);",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "graphql",
+							"graphql": {
+								"query": "{\n  transactions(userId: \"user-001\", category: TRAVEL) {\n    category\n    cashbackPercentage\n  }\n}",
+								"variables": ""
+							}
+						},
+						"url": {
+							"raw": "{{GRAPHQL_ENDPOINT}}",
+							"host": ["{{GRAPHQL_ENDPOINT}}"]
+						},
+						"description": "**Calculated Field with Business Logic**\n\ncashbackPercentage = tier.basePercentage × category.multiplier\n\nExample:\n- User GOLD (3% base)\n- Category TRAVEL (3x multiplier)\n- Result: 9%"
+					},
+					"response": []
+				},
+				{
+					"name": "2.3.4 - Mutation with Structured Response",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test(\"Mutation returns TransactionResponse structure\", function () {",
+									"    var jsonData = pm.response.json();",
+									"    var response = jsonData.data.createTransaction;",
+									"    pm.expect(response).to.have.property('success');",
+									"    pm.expect(response).to.have.property('message');",
+									"    pm.expect(response).to.have.property('transaction');",
+									"});",
+									"",
+									"pm.test(\"Transaction was created successfully\", function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData.data.createTransaction.success).to.be.true;",
+									"    pm.expect(jsonData.data.createTransaction.transaction).to.have.property('cashbackAmount');",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "graphql",
+							"graphql": {
+								"query": "mutation {\n  createTransaction(input: {\n    userId: \"user-001\"\n    amount: 200.0\n    category: RESTAURANTS\n    merchantName: \"Sushi Bar\"\n  }) {\n    success\n    message\n    transaction {\n      cashbackAmount\n    }\n  }\n}",
+								"variables": ""
+							}
+						},
+						"url": {
+							"raw": "{{GRAPHQL_ENDPOINT}}",
+							"host": ["{{GRAPHQL_ENDPOINT}}"]
+						},
+						"description": "**Mutation with Structured Response**\n\nTransactionResponse includes:\n- success: Boolean\n- message: String\n- transaction: Transaction (the created object)\n\nThis provides clear feedback to clients."
+					},
+					"response": []
+				},
+				{
+					"name": "2.3.5 - Mutation that Creates Multiple Entities",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test(\"createTransaction creates Transaction AND generates Reward\", function () {",
+									"    var jsonData = pm.response.json();",
+									"    var tx = jsonData.data.createTransaction.transaction;",
+									"    // Mutation creates Transaction and auto-generates associated Reward",
+									"    pm.expect(tx.cashbackAmount).to.be.above(0);",
+									"    // GOLD (3%) × TRAVEL (3x) × 300 = 27",
+									"    pm.expect(tx.cashbackAmount).to.eql(27);",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "graphql",
+							"graphql": {
+								"query": "mutation {\n  createTransaction(input: {\n    userId: \"user-001\"\n    amount: 300.0\n    category: TRAVEL\n    merchantName: \"Flight Booking\"\n  }) {\n    success\n    transaction {\n      cashbackAmount\n    }\n  }\n}",
+								"variables": ""
+							}
+						},
+						"url": {
+							"raw": "{{GRAPHQL_ENDPOINT}}",
+							"host": ["{{GRAPHQL_ENDPOINT}}"]
+						},
+						"description": "**Complex Mutation**\n\nSingle mutation creates:\n1. Transaction (with status CONFIRMED)\n2. Reward (auto-generated based on tier + category)\n\nDemonstrates transaction-level operations."
+					},
+					"response": []
+				},
+				{
+					"name": "2.3.6 - Complex Query Combining Everything",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test(\"Complex query returns all requested data\", function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData.data.user).to.have.all.keys('fullName', 'tier', 'availableCashback', 'totalSpent');",
+									"    pm.expect(jsonData.data.transactions).to.be.an('array');",
+									"    pm.expect(jsonData.data.transactions[0]).to.have.property('cashbackAmount');",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "graphql",
+							"graphql": {
+								"query": "{\n  user(id: \"user-001\") {\n    fullName\n    tier\n    availableCashback\n    totalSpent\n  }\n  transactions(userId: \"user-001\", category: RESTAURANTS) {\n    amount\n    merchantName\n    cashbackAmount\n    cashbackPercentage\n  }\n}",
+								"variables": ""
+							}
+						},
+						"url": {
+							"raw": "{{GRAPHQL_ENDPOINT}}",
+							"host": ["{{GRAPHQL_ENDPOINT}}"]
+						},
+						"description": "**Complex Query Combining:**\n- User data\n- Calculated fields (availableCashback, totalSpent)\n- Filtered transactions (RESTAURANTS only)\n- Transaction calculated fields (cashbackAmount, cashbackPercentage)"
+					},
+					"response": []
+				},
+				{
+					"name": "2.3.7 - Enum Validation (TransactionCategory)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test(\"Valid enum value accepted\", function () {",
+									"    var jsonData = pm.response.json();",
+									"    jsonData.data.transactions.forEach(tx => {",
+									"        pm.expect(tx.category).to.eql('GROCERIES');",
+									"    });",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "graphql",
+							"graphql": {
+								"query": "{\n  transactions(category: GROCERIES) {\n    category\n  }\n}",
+								"variables": ""
+							}
+						},
+						"url": {
+							"raw": "{{GRAPHQL_ENDPOINT}}",
+							"host": ["{{GRAPHQL_ENDPOINT}}"]
+						},
+						"description": "**Automatic Enum Validation**\n\nGraphQL validates enum values automatically.\n\nInvalid values (e.g., INVALID_CATEGORY) would be rejected before reaching the resolver."
+					},
+					"response": []
+				},
+				{
+					"name": "2.3.8 - Introspection (Schema Self-Documentation)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test(\"Introspection returns User type definition\", function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData.data.__type.name).to.eql('User');",
+									"    pm.expect(jsonData.data.__type.fields).to.be.an('array');",
+									"    pm.expect(jsonData.data.__type.fields.length).to.be.above(0);",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "graphql",
+							"graphql": {
+								"query": "{\n  __type(name: \"User\") {\n    name\n    fields {\n      name\n      type {\n        name\n      }\n    }\n  }\n}",
+								"variables": ""
+							}
+						},
+						"url": {
+							"raw": "{{GRAPHQL_ENDPOINT}}",
+							"host": ["{{GRAPHQL_ENDPOINT}}"]
+						},
+						"description": "**Schema Introspection**\n\nClients can query the schema itself to discover:\n- Available types\n- Fields on each type\n- Arguments\n- Descriptions\n\nThis enables auto-generated documentation."
+					},
+					"response": []
+				},
+				{
+					"name": "2.3.9 - List with Calculated Elements",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test(\"All transactions have calculated cashback fields\", function () {",
+									"    var jsonData = pm.response.json();",
+									"    jsonData.data.transactions.forEach(tx => {",
+									"        pm.expect(tx).to.have.property('amount');",
+									"        pm.expect(tx).to.have.property('cashbackAmount');",
+									"        pm.expect(tx).to.have.property('cashbackPercentage');",
+									"        pm.expect(tx.cashbackAmount).to.be.a('number');",
+									"    });",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "graphql",
+							"graphql": {
+								"query": "{\n  transactions(userId: \"user-001\") {\n    amount\n    cashbackAmount\n    cashbackPercentage\n  }\n}",
+								"variables": ""
+							}
+						},
+						"url": {
+							"raw": "{{GRAPHQL_ENDPOINT}}",
+							"host": ["{{GRAPHQL_ENDPOINT}}"]
+						},
+						"description": "**List with Calculated Elements**\n\nEach transaction in the list has calculated fields:\n- cashbackAmount (amount × percentage)\n- cashbackPercentage (tier × category multiplier)"
+					},
+					"response": []
+				},
+				{
+					"name": "2.3.10 - Many-to-One Relationship",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test(\"Multiple transactions belong to same user\", function () {",
+									"    var jsonData = pm.response.json();",
+									"    var users = jsonData.data.transactions.map(tx => tx.user.fullName);",
+									"    pm.expect(users.every(name => name === 'Maria Silva')).to.be.true;",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "graphql",
+							"graphql": {
+								"query": "{\n  transactions(userId: \"user-001\") {\n    user {\n      fullName\n    }\n  }\n}",
+								"variables": ""
+							}
+						},
+						"url": {
+							"raw": "{{GRAPHQL_ENDPOINT}}",
+							"host": ["{{GRAPHQL_ENDPOINT}}"]
+						},
+						"description": "**Many-to-One Relationship**\n\nMultiple transactions can belong to the same user.\n\nGraphQL resolves this relationship efficiently."
+					},
+					"response": []
+				}
+			],
+			"description": "Tests for complex queries, mutations, and advanced operations"
+		},
+		{
+			"name": "Bonus - Extra Design Validations",
+			"item": [
+				{
+					"name": "BONUS.1 - Filter by Single Category (TRAVEL)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test(\"Only TRAVEL transactions returned\", function () {",
+									"    var jsonData = pm.response.json();",
+									"    jsonData.data.transactions.forEach(tx => {",
+									"        pm.expect(tx.category).to.eql('TRAVEL');",
+									"    });",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "graphql",
+							"graphql": {
+								"query": "{\n  transactions(category: TRAVEL) {\n    category\n  }\n}",
+								"variables": ""
+							}
+						},
+						"url": {
+							"raw": "{{GRAPHQL_ENDPOINT}}",
+							"host": ["{{GRAPHQL_ENDPOINT}}"]
+						},
+						"description": "Filter transactions by a single category"
+					},
+					"response": []
+				},
+				{
+					"name": "BONUS.2 - Filter Users by Tier (PLATINUM)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test(\"Only PLATINUM users returned\", function () {",
+									"    var jsonData = pm.response.json();",
+									"    jsonData.data.users.forEach(user => {",
+									"        pm.expect(user.tier).to.eql('PLATINUM');",
+									"    });",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "graphql",
+							"graphql": {
+								"query": "{\n  users(tier: PLATINUM) {\n    tier\n    fullName\n  }\n}",
+								"variables": ""
+							}
+						},
+						"url": {
+							"raw": "{{GRAPHQL_ENDPOINT}}",
+							"host": ["{{GRAPHQL_ENDPOINT}}"]
+						},
+						"description": "Filter users by cashback tier"
+					},
+					"response": []
+				},
+				{
+					"name": "BONUS.3 - Calculated Totals (totalSpent, totalCashbackEarned)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test(\"Calculated totals are numbers\", function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData.data.user.totalSpent).to.be.a('number');",
+									"    pm.expect(jsonData.data.user.totalCashbackEarned).to.be.a('number');",
+									"    pm.expect(jsonData.data.user.totalSpent).to.be.above(0);",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "graphql",
+							"graphql": {
+								"query": "{\n  user(id: \"user-001\") {\n    totalSpent\n    totalCashbackEarned\n  }\n}",
+								"variables": ""
+							}
+						},
+						"url": {
+							"raw": "{{GRAPHQL_ENDPOINT}}",
+							"host": ["{{GRAPHQL_ENDPOINT}}"]
+						},
+						"description": "Validate calculated total fields"
+					},
+					"response": []
+				},
+				{
+					"name": "BONUS.4 - Cashback with Category Multiplier (TRAVEL 3x)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test(\"TRAVEL category has 3x multiplier (9% for GOLD user)\", function () {",
+									"    var jsonData = pm.response.json();",
+									"    var travelTx = jsonData.data.transactions.find(tx => tx.category === 'TRAVEL');",
+									"    pm.expect(travelTx.cashbackPercentage).to.eql(9);",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "graphql",
+							"graphql": {
+								"query": "{\n  transactions(userId: \"user-001\", category: TRAVEL) {\n    category\n    cashbackPercentage\n  }\n}",
+								"variables": ""
+							}
+						},
+						"url": {
+							"raw": "{{GRAPHQL_ENDPOINT}}",
+							"host": ["{{GRAPHQL_ENDPOINT}}"]
+						},
+						"description": "Validate category multipliers in cashback calculation"
+					},
+					"response": []
+				},
+				{
+					"name": "BONUS.5 - PLATINUM User Higher Cashback",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test(\"PLATINUM user has cashback\", function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData.data.user.tier).to.eql('PLATINUM');",
+									"    pm.expect(jsonData.data.user.availableCashback).to.be.a('number');",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "graphql",
+							"graphql": {
+								"query": "{\n  user(id: \"user-002\") {\n    tier\n    availableCashback\n  }\n}",
+								"variables": ""
+							}
+						},
+						"url": {
+							"raw": "{{GRAPHQL_ENDPOINT}}",
+							"host": ["{{GRAPHQL_ENDPOINT}}"]
+						},
+						"description": "Validate PLATINUM tier cashback (5% base)"
+					},
+					"response": []
+				},
+				{
+					"name": "BONUS.6 - All Users Query",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test(\"Returns multiple users\", function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData.data.users).to.be.an('array');",
+									"    pm.expect(jsonData.data.users.length).to.be.at.least(2);",
+									"    var userIds = jsonData.data.users.map(u => u.id);",
+									"    pm.expect(userIds).to.include('user-001');",
+									"    pm.expect(userIds).to.include('user-002');",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "graphql",
+							"graphql": {
+								"query": "{\n  users {\n    id\n    fullName\n    tier\n  }\n}",
+								"variables": ""
+							}
+						},
+						"url": {
+							"raw": "{{GRAPHQL_ENDPOINT}}",
+							"host": ["{{GRAPHQL_ENDPOINT}}"]
+						},
+						"description": "Query all users in the system"
+					},
+					"response": []
+				}
+			],
+			"description": "Additional validation tests for comprehensive coverage"
+		}
+	],
+	"variable": [
+		{
+			"key": "GRAPHQL_ENDPOINT",
+			"value": "http://localhost:8080/graphql",
+			"type": "string"
+		}
+	]
+}

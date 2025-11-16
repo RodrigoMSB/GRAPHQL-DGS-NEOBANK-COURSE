@@ -1,0 +1,259 @@
+package com.neobank.portfolio.data;
+
+import com.neobank.portfolio.model.Asset;
+import com.neobank.portfolio.model.AssetType;
+import com.neobank.portfolio.model.Performance;
+import com.neobank.portfolio.model.Portfolio;
+import org.springframework.stereotype.Service;
+
+import java.time.LocalDateTime;
+import java.util.*;
+import java.util.stream.Collectors;
+
+/**
+ * Servicio de datos simulados (Mock Data Service)
+ * 
+ * En un entorno real, esto se conectaría a una base de datos.
+ * Para el Capítulo 1, usamos datos en memoria para enfocarnos en GraphQL.
+ * 
+ * IMPORTANTE: Este servicio es compartido por REST y GraphQL
+ * para demostrar que ambos pueden usar la misma lógica de negocio.
+ */
+@Service
+public class MockDataService {
+    
+    private final Map<String, Portfolio> portfolios = new HashMap<>();
+    private final Map<String, Asset> assets = new HashMap<>();
+    
+    public MockDataService() {
+        initializeMockData();
+    }
+    
+    /**
+     * Inicializa datos de ejemplo
+     */
+    private void initializeMockData() {
+        // Usuario demo
+        String userId = "user-001";
+        String userName = "Carlos Mendoza";
+        
+        // Portfolio 1: Growth Portfolio
+        Portfolio growthPortfolio = createPortfolio(
+            "portfolio-001",
+            "Growth Portfolio",
+            userId,
+            userName
+        );
+        
+        // Añadir activos al Growth Portfolio
+        addAssetToPortfolio(growthPortfolio, createAsset(
+            "asset-001", "AAPL", "Apple Inc.", AssetType.STOCK,
+            10.0, 150.0, 185.50
+        ));
+        
+        addAssetToPortfolio(growthPortfolio, createAsset(
+            "asset-002", "GOOGL", "Alphabet Inc.", AssetType.STOCK,
+            5.0, 2800.0, 2950.75
+        ));
+        
+        addAssetToPortfolio(growthPortfolio, createAsset(
+            "asset-003", "BTC", "Bitcoin", AssetType.CRYPTO,
+            0.5, 45000.0, 67000.0
+        ));
+        
+        addAssetToPortfolio(growthPortfolio, createAsset(
+            "asset-004", "VOO", "Vanguard S&P 500 ETF", AssetType.ETF,
+            20.0, 400.0, 445.25
+        ));
+        
+        // Portfolio 2: Retirement Fund
+        Portfolio retirementPortfolio = createPortfolio(
+            "portfolio-002",
+            "Retirement Fund",
+            userId,
+            userName
+        );
+        
+        addAssetToPortfolio(retirementPortfolio, createAsset(
+            "asset-005", "BND", "Vanguard Total Bond Market ETF", AssetType.ETF,
+            50.0, 80.0, 82.15
+        ));
+        
+        addAssetToPortfolio(retirementPortfolio, createAsset(
+            "asset-006", "GLD", "SPDR Gold Shares", AssetType.COMMODITY,
+            15.0, 180.0, 195.30
+        ));
+        
+        addAssetToPortfolio(retirementPortfolio, createAsset(
+            "asset-007", "MSFT", "Microsoft Corporation", AssetType.STOCK,
+            8.0, 300.0, 378.85
+        ));
+        
+        // Calcular valores totales y performance
+        growthPortfolio.calculateTotalValue();
+        retirementPortfolio.calculateTotalValue();
+        
+        growthPortfolio.setPerformance(calculatePerformance(growthPortfolio));
+        retirementPortfolio.setPerformance(calculatePerformance(retirementPortfolio));
+        
+        // Guardar en el repositorio
+        portfolios.put(growthPortfolio.getId(), growthPortfolio);
+        portfolios.put(retirementPortfolio.getId(), retirementPortfolio);
+    }
+    
+    private Portfolio createPortfolio(String id, String name, String ownerId, String ownerName) {
+        return Portfolio.builder()
+                .id(id)
+                .name(name)
+                .ownerId(ownerId)
+                .ownerName(ownerName)
+                .createdAt(LocalDateTime.now().minusMonths(6))
+                .assets(new ArrayList<>())
+                .build();
+    }
+    
+    private Asset createAsset(String id, String symbol, String name, AssetType type,
+                             Double quantity, Double buyPrice, Double currentPrice) {
+        Asset asset = Asset.builder()
+                .id(id)
+                .symbol(symbol)
+                .name(name)
+                .assetType(type)
+                .quantity(quantity)
+                .averageBuyPrice(buyPrice)
+                .currentPrice(currentPrice)
+                .lastUpdated(LocalDateTime.now())
+                .build();
+        
+        assets.put(id, asset);
+        return asset;
+    }
+    
+    private void addAssetToPortfolio(Portfolio portfolio, Asset asset) {
+        portfolio.getAssets().add(asset);
+    }
+    
+    private Performance calculatePerformance(Portfolio portfolio) {
+        List<Asset> assetList = portfolio.getAssets();
+        
+        if (assetList.isEmpty()) {
+            return Performance.builder()
+                    .totalReturn(0.0)
+                    .yearReturn(0.0)
+                    .monthReturn(0.0)
+                    .weekReturn(0.0)
+                    .build();
+        }
+        
+        // Calcular mejor y peor performer
+        Asset best = assetList.stream()
+                .max(Comparator.comparing(Asset::getProfitLossPercent))
+                .orElse(null);
+        
+        Asset worst = assetList.stream()
+                .min(Comparator.comparing(Asset::getProfitLossPercent))
+                .orElse(null);
+        
+        // Calcular rendimiento promedio
+        double avgReturn = assetList.stream()
+                .mapToDouble(Asset::getProfitLossPercent)
+                .average()
+                .orElse(0.0);
+        
+        return Performance.builder()
+                .totalReturn(avgReturn)
+                .yearReturn(avgReturn * 0.8) // Simulado
+                .monthReturn(avgReturn * 0.2) // Simulado
+                .weekReturn(avgReturn * 0.05) // Simulado
+                .bestPerformer(best)
+                .worstPerformer(worst)
+                .build();
+    }
+    
+    // =========================================================================
+    // MÉTODOS PÚBLICOS PARA CONSULTAS
+    // =========================================================================
+    
+    public List<Portfolio> getAllPortfolios() {
+        return new ArrayList<>(portfolios.values());
+    }
+    
+    public Portfolio getPortfolioById(String id) {
+        return portfolios.get(id);
+    }
+    
+    public List<Portfolio> getPortfoliosByOwnerId(String ownerId) {
+        return portfolios.values().stream()
+                .filter(p -> p.getOwnerId().equals(ownerId))
+                .collect(Collectors.toList());
+    }
+    
+    public Asset getAssetById(String id) {
+        return assets.get(id);
+    }
+    
+    public Asset getAssetBySymbol(String symbol) {
+        return assets.values().stream()
+                .filter(a -> a.getSymbol().equalsIgnoreCase(symbol))
+                .findFirst()
+                .orElse(null);
+    }
+    
+    public List<Asset> getAssetsByPortfolioId(String portfolioId) {
+        Portfolio portfolio = portfolios.get(portfolioId);
+        return portfolio != null ? portfolio.getAssets() : new ArrayList<>();
+    }
+    
+    public Performance getPerformance(String portfolioId) {
+        Portfolio portfolio = portfolios.get(portfolioId);
+        return portfolio != null ? portfolio.getPerformance() : null;
+    }
+    
+    // =========================================================================
+    // MÉTODOS PARA MUTATIONS
+    // =========================================================================
+    
+    public Portfolio createPortfolio(String name, String ownerId, String ownerName) {
+        String id = "portfolio-" + UUID.randomUUID().toString().substring(0, 8);
+        Portfolio portfolio = createPortfolio(id, name, ownerId, ownerName);
+        portfolio.setTotalValue(0.0); // ← LÍNEA AGREGADA: Inicializar en 0 para portfolios vacíos
+        portfolios.put(id, portfolio);
+        return portfolio;
+    }
+    
+    public Asset addAssetToPortfolio(String portfolioId, String symbol, String name,
+                                     AssetType type, Double quantity, Double buyPrice) {
+        Portfolio portfolio = portfolios.get(portfolioId);
+        if (portfolio == null) {
+            throw new IllegalArgumentException("Portfolio not found: " + portfolioId);
+        }
+        
+        String assetId = "asset-" + UUID.randomUUID().toString().substring(0, 8);
+        
+        // En un caso real, obtendríamos el precio actual de una API de mercado
+        Double currentPrice = buyPrice * 1.15; // Simulamos 15% de ganancia
+        
+        Asset asset = createAsset(assetId, symbol, name, type, quantity, buyPrice, currentPrice);
+        addAssetToPortfolio(portfolio, asset);
+        portfolio.calculateTotalValue();
+        portfolio.setPerformance(calculatePerformance(portfolio));
+        
+        return asset;
+    }
+    
+    public boolean removeAsset(String portfolioId, String assetId) {
+        Portfolio portfolio = portfolios.get(portfolioId);
+        if (portfolio == null) {
+            return false;
+        }
+        
+        boolean removed = portfolio.getAssets().removeIf(a -> a.getId().equals(assetId));
+        if (removed) {
+            assets.remove(assetId);
+            portfolio.calculateTotalValue();
+            portfolio.setPerformance(calculatePerformance(portfolio));
+        }
+        
+        return removed;
+    }
+}

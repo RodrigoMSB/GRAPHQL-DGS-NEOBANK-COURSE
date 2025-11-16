@@ -1,0 +1,552 @@
+# ==============================================================================
+# CHAPTER 02: CASHBACK REWARDS SCHEMA (GOOD DESIGN)
+# ==============================================================================
+#
+# Este schema demuestra las BUENAS PRÁCTICAS de diseño GraphQL:
+#
+# 1. DOMAIN-DRIVEN DESIGN: Entidades orientadas al dominio del negocio
+# 2. SEPARACIÓN INPUT/OUTPUT: Input types != Output types
+# 3. TIPOS ESCALARES CUSTOM: Money, Percentage, DateTime
+# 4. NULLABILIDAD CORRECTA: ! solo donde realmente es obligatorio
+# 5. LISTAS BIEN TIPADAS: [Type!]! vs [Type] vs [Type!]
+# 6. ENUMS DESCRIPTIVOS: Estados y categorías bien definidos
+# 7. RELACIONES CLARAS: One-to-many, many-to-one explícitas
+# 8. NAMING CONSISTENTE: camelCase para campos, PascalCase para tipos
+#
+# COMPARAR CON: bad-schema.graphqls (en schema-design/)
+#
+# ==============================================================================
+
+# ==============================================================================
+# CUSTOM SCALARS
+# ==============================================================================
+# Escalares personalizados para tipos específicos del dominio.
+# Validación automática + semántica clara.
+#
+# SECCIÓN 2.2: Tipos escalares personalizados
+# ==============================================================================
+
+scalar DateTime      # ISO-8601: "2025-11-15T10:30:00Z"
+scalar Money         # Decimal preciso: "125.50" (sin redondeo flotante)
+scalar Percentage    # 0-100: "15.5" (cashback rate)
+scalar Email         # Validación email: "user@example.com"
+
+# ==============================================================================
+# ENUMS
+# ==============================================================================
+# Conjuntos finitos de valores permitidos.
+# Validación automática + auto-documentación.
+#
+# SECCIÓN 2.2: Enums para categorías y estados
+# ==============================================================================
+
+"""
+Niveles del programa de cashback.
+Cada tier tiene diferentes porcentajes de recompensa.
+"""
+enum CashbackTier {
+    BRONZE      # 1% cashback
+    SILVER      # 2% cashback
+    GOLD        # 3% cashback
+    PLATINUM    # 5% cashback
+}
+
+"""
+Categorías de transacciones para cashback diferenciado.
+Algunas categorías tienen mayor % de cashback.
+"""
+enum TransactionCategory {
+    GROCERIES           # Supermercados
+    RESTAURANTS         # Restaurantes y delivery
+    GAS_STATIONS        # Gasolineras
+    TRAVEL              # Vuelos, hoteles, transporte
+    ENTERTAINMENT       # Cine, streaming, eventos
+    HEALTH_FITNESS      # Gimnasio, salud
+    SHOPPING            # Retail general
+    UTILITIES           # Servicios básicos
+    OTHER               # Otros gastos
+}
+
+"""
+Estado de una transacción en el sistema.
+"""
+enum TransactionStatus {
+    PENDING             # Pendiente de confirmación
+    CONFIRMED           # Confirmada, cashback calculado
+    CANCELLED           # Cancelada, sin cashback
+    REFUNDED            # Reembolsada, cashback revertido
+}
+
+"""
+Estado de una recompensa de cashback.
+"""
+enum RewardStatus {
+    PENDING             # Cashback pendiente (período de espera)
+    AVAILABLE           # Disponible para redimir
+    REDEEMED            # Ya canjeado
+    EXPIRED             # Expirado (después de 12 meses)
+}
+
+# ==============================================================================
+# OUTPUT TYPES (Entidades del dominio)
+# ==============================================================================
+# Tipos que el servidor RETORNA al cliente.
+# Representan entidades reales del dominio.
+#
+# SECCIÓN 2.1: Modelado orientado a dominio
+# SECCIÓN 2.2: Object types vs Input types
+# ==============================================================================
+
+"""
+Usuario del programa de cashback.
+Tiene un tier que determina sus porcentajes de recompensa.
+"""
+type User {
+    id: ID!
+    email: Email!
+    fullName: String!
+    
+    # Nivel en el programa de cashback
+    tier: CashbackTier!
+    
+    # Fecha de registro en el programa
+    enrolledAt: DateTime!
+    
+    # RELACIONES (one-to-many)
+    # Un usuario tiene muchas transacciones
+    transactions(
+        status: TransactionStatus
+        category: TransactionCategory
+        limit: Int = 10
+        offset: Int = 0
+    ): TransactionConnection!
+    
+    # Un usuario tiene muchas recompensas
+    rewards(
+        status: RewardStatus
+        limit: Int = 10
+        offset: Int = 0
+    ): RewardConnection!
+    
+    # CAMPOS CALCULADOS
+    # Total acumulado de cashback disponible
+    availableCashback: Money!
+    
+    # Total de cashback ganado históricamente
+    totalCashbackEarned: Money!
+    
+    # Total gastado en transacciones
+    totalSpent: Money!
+}
+
+"""
+Transacción que genera cashback.
+Cada compra del usuario crea una transacción.
+"""
+type Transaction {
+    id: ID!
+    
+    # RELACIÓN (many-to-one)
+    # Muchas transacciones pertenecen a un usuario
+    user: User!
+    
+    # Detalles de la transacción
+    amount: Money!
+    category: TransactionCategory!
+    merchantName: String!
+    description: String
+    transactionDate: DateTime!
+    status: TransactionStatus!
+    
+    # CAMPOS CALCULADOS
+    # Cashback generado por esta transacción
+    cashbackAmount: Money!
+    cashbackPercentage: Percentage!
+    
+    # Recompensa asociada (si ya se creó)
+    reward: Reward
+}
+
+"""
+Recompensa de cashback ganada.
+Se crea cuando una transacción se confirma.
+"""
+type Reward {
+    id: ID!
+    
+    # RELACIÓN (many-to-one)
+    user: User!
+    
+    # Transacción que generó esta recompensa
+    transaction: Transaction!
+    
+    # Detalles de la recompensa
+    amount: Money!
+    earnedAt: DateTime!
+    expiresAt: DateTime!
+    status: RewardStatus!
+    
+    # Si fue canjeada
+    redeemedAt: DateTime
+    redemptionMethod: String
+}
+
+# ==============================================================================
+# CONNECTION TYPES (para paginación)
+# ==============================================================================
+# Patrón Relay para paginación cursor-based.
+#
+# SECCIÓN 2.3: Queries complejas con paginación
+# ==============================================================================
+
+"""
+Conexión paginada de transacciones.
+Sigue el patrón Relay Cursor Connections.
+"""
+type TransactionConnection {
+    edges: [TransactionEdge!]!
+    pageInfo: PageInfo!
+    totalCount: Int!
+}
+
+type TransactionEdge {
+    cursor: String!
+    node: Transaction!
+}
+
+"""
+Conexión paginada de recompensas.
+"""
+type RewardConnection {
+    edges: [RewardEdge!]!
+    pageInfo: PageInfo!
+    totalCount: Int!
+}
+
+type RewardEdge {
+    cursor: String!
+    node: Reward!
+}
+
+"""
+Información de paginación (estándar Relay).
+"""
+type PageInfo {
+    hasNextPage: Boolean!
+    hasPreviousPage: Boolean!
+    startCursor: String
+    endCursor: String
+}
+
+# ==============================================================================
+# INPUT TYPES (para mutations)
+# ==============================================================================
+# Tipos que el cliente ENVÍA al servidor.
+# Separados de los output types para flexibilidad.
+#
+# SECCIÓN 2.2: Diferencia entre input types y object types
+# SECCIÓN 2.3: Mutations complejas
+# ==============================================================================
+
+"""
+Input para crear una nueva transacción.
+El cashback se calcula automáticamente según tier y categoría.
+"""
+input CreateTransactionInput {
+    userId: ID!
+    amount: Money!
+    category: TransactionCategory!
+    merchantName: String!
+    description: String
+    transactionDate: DateTime
+}
+
+"""
+Input para actualizar el tier de un usuario.
+Puede afectar el % de cashback futuro.
+"""
+input UpdateUserTierInput {
+    userId: ID!
+    newTier: CashbackTier!
+    reason: String
+}
+
+"""
+Input para canjear cashback disponible.
+"""
+input RedeemCashbackInput {
+    userId: ID!
+    amount: Money!
+    redemptionMethod: String!  # "BANK_TRANSFER", "GIFT_CARD", etc.
+}
+
+"""
+Input para cancelar una transacción.
+Revierte el cashback si ya fue acreditado.
+"""
+input CancelTransactionInput {
+    transactionId: ID!
+    reason: String!
+}
+
+# ==============================================================================
+# RESPONSE TYPES (para mutations)
+# ==============================================================================
+# Wrappers para respuestas de mutations.
+# Incluyen success, message, y los datos creados/actualizados.
+#
+# SECCIÓN 2.3: Mutations que retornan objetos compuestos
+# ==============================================================================
+
+"""
+Respuesta estándar para mutations de transacciones.
+"""
+type TransactionResponse {
+    success: Boolean!
+    message: String!
+    transaction: Transaction
+}
+
+"""
+Respuesta para redención de cashback.
+"""
+type RedemptionResponse {
+    success: Boolean!
+    message: String!
+    redeemedAmount: Money
+    remainingCashback: Money
+    rewards: [Reward!]  # Recompensas canjeadas
+}
+
+"""
+Respuesta para actualización de tier.
+"""
+type TierUpdateResponse {
+    success: Boolean!
+    message: String!
+    user: User
+    previousTier: CashbackTier
+    newTier: CashbackTier
+}
+
+# ==============================================================================
+# QUERIES
+# ==============================================================================
+# Operaciones de LECTURA.
+#
+# SECCIÓN 2.3: Queries con múltiples parámetros
+# ==============================================================================
+
+type Query {
+    # ------------------------------------------------------------------------
+    # QUERIES DE USUARIO
+    # ------------------------------------------------------------------------
+    
+    """
+    Obtener usuario por ID.
+    """
+    user(id: ID!): User
+    
+    """
+    Buscar usuarios por email.
+    """
+    userByEmail(email: Email!): User
+    
+    """
+    Listar todos los usuarios del programa.
+    """
+    users(
+        tier: CashbackTier
+        limit: Int = 20
+        offset: Int = 0
+    ): [User!]!
+    
+    # ------------------------------------------------------------------------
+    # QUERIES DE TRANSACCIONES
+    # ------------------------------------------------------------------------
+    
+    """
+    Obtener transacción por ID.
+    """
+    transaction(id: ID!): Transaction
+    
+    """
+    Listar transacciones con filtros.
+    Ejemplo de query compleja con múltiples parámetros opcionales.
+    """
+    transactions(
+        userId: ID
+        status: TransactionStatus
+        category: TransactionCategory
+        minAmount: Money
+        maxAmount: Money
+        startDate: DateTime
+        endDate: DateTime
+        limit: Int = 20
+        offset: Int = 0
+    ): [Transaction!]!
+    
+    # ------------------------------------------------------------------------
+    # QUERIES DE RECOMPENSAS
+    # ------------------------------------------------------------------------
+    
+    """
+    Obtener recompensa por ID.
+    """
+    reward(id: ID!): Reward
+    
+    """
+    Listar recompensas con filtros.
+    """
+    rewards(
+        userId: ID
+        status: RewardStatus
+        limit: Int = 20
+        offset: Int = 0
+    ): RewardConnection!
+    
+    # ------------------------------------------------------------------------
+    # QUERIES DE ANALYTICS
+    # ------------------------------------------------------------------------
+    
+    """
+    Estadísticas de cashback de un usuario.
+    Ejemplo de query que retorna estructura anidada calculada.
+    """
+    cashbackSummary(userId: ID!): CashbackSummary!
+}
+
+"""
+Resumen de cashback para analytics.
+Agrupa datos calculados para dashboards.
+"""
+type CashbackSummary {
+    userId: ID!
+    
+    # Totales
+    totalEarned: Money!
+    totalAvailable: Money!
+    totalRedeemed: Money!
+    totalExpired: Money!
+    
+    # Por categoría (lista anidada)
+    byCategory: [CategoryCashback!]!
+    
+    # Por mes (últimos 12 meses)
+    byMonth: [MonthlyCashback!]!
+    
+    # Tier actual y siguiente
+    currentTier: CashbackTier!
+    nextTier: CashbackTier
+    amountToNextTier: Money
+}
+
+"""
+Cashback agrupado por categoría.
+"""
+type CategoryCashback {
+    category: TransactionCategory!
+    totalEarned: Money!
+    transactionCount: Int!
+    averagePercentage: Percentage!
+}
+
+"""
+Cashback agrupado por mes.
+"""
+type MonthlyCashback {
+    month: String!        # "2025-11"
+    earned: Money!
+    redeemed: Money!
+    transactionCount: Int!
+}
+
+# ==============================================================================
+# MUTATIONS
+# ==============================================================================
+# Operaciones de ESCRITURA.
+#
+# SECCIÓN 2.3: Mutations complejas que modifican múltiples entidades
+# ==============================================================================
+
+type Mutation {
+    # ------------------------------------------------------------------------
+    # MUTATIONS DE TRANSACCIONES
+    # ------------------------------------------------------------------------
+    
+    """
+    Crear una nueva transacción.
+    Calcula automáticamente el cashback según tier y categoría.
+    Puede crear una Reward si la transacción es elegible.
+    """
+    createTransaction(input: CreateTransactionInput!): TransactionResponse!
+    
+    """
+    Cancelar una transacción.
+    Si ya generó cashback, lo revierte.
+    """
+    cancelTransaction(input: CancelTransactionInput!): TransactionResponse!
+    
+    # ------------------------------------------------------------------------
+    # MUTATIONS DE CASHBACK
+    # ------------------------------------------------------------------------
+    
+    """
+    Canjear cashback disponible.
+    Marca rewards como REDEEMED y procesa la redención.
+    """
+    redeemCashback(input: RedeemCashbackInput!): RedemptionResponse!
+    
+    # ------------------------------------------------------------------------
+    # MUTATIONS DE USUARIO
+    # ------------------------------------------------------------------------
+    
+    """
+    Actualizar el tier de un usuario.
+    Afecta el % de cashback futuro.
+    """
+    updateUserTier(input: UpdateUserTierInput!): TierUpdateResponse!
+}
+
+# ==============================================================================
+# NOTAS DE DISEÑO
+# ==============================================================================
+#
+# BUENAS PRÁCTICAS APLICADAS:
+#
+# 1. NULLABILIDAD INTELIGENTE:
+#    - ID! siempre non-null (identidad)
+#    - Listas [Type!]! cuando garantizamos no-null ni lista ni elementos
+#    - Campos opcionales sin ! cuando pueden ser null (ej: description)
+#
+# 2. RELACIONES BIDIRECCIONALES:
+#    - User → transactions (one-to-many)
+#    - Transaction → user (many-to-one)
+#    - Permite navegación en ambas direcciones
+#
+# 3. CAMPOS CALCULADOS:
+#    - availableCashback, totalCashbackEarned en User
+#    - cashbackAmount, cashbackPercentage en Transaction
+#    - Se calculan en el resolver, no están en DB
+#
+# 4. PAGINACIÓN RELAY:
+#    - Connections con edges + pageInfo
+#    - Cursor-based (no offset/limit directo)
+#    - Escalable y estable
+#
+# 5. INPUTS SEPARADOS:
+#    - CreateTransactionInput != Transaction
+#    - Flexibilidad para evolucionar independientemente
+#    - Validación específica por operación
+#
+# 6. RESPONSES ESTRUCTURADAS:
+#    - success + message + data
+#    - Consistencia en todas las mutations
+#    - Facilita manejo de errores en cliente
+#
+# 7. CUSTOM SCALARS:
+#    - Money para evitar errores de redondeo
+#    - Percentage semánticamente claro
+#    - DateTime con timezone
+#
+# ==============================================================================

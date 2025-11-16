@@ -28,3 +28,4 @@ release.properties
 
 # Test results
 test-results-*.txt
+/.metadata/
