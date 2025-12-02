@@ -1,0 +1,597 @@
+{
+  "info": {
+    "_postman_id": "ch04-smart-savings-goals",
+    "name": "CHAPTER 04: Smart Savings Goals - PostgreSQL Integration",
+    "description": "Complete test suite for Chapter 04 - Persistence, Services & Performance\n\n**Covers:**\n- Test 1-3: Query Operations (savingsGoals, activeSavingsGoals, single goal)\n- Test 4: Multi-user queries\n- Test 5-6: Mutations (createSavingsGoal)\n- Test 7: Status filtering (PAUSED goals)\n- Test 8: Calculated fields (progressPercentage)\n- Test 9: Active filtering validation\n- Test 10: Minimal field mutations\n\n**Total: 10 automated tests**\n\n**Feature:** Smart Savings Goals with PostgreSQL\n**Stack:** Spring Boot 3.2 + Netflix DGS 8.2.0 + PostgreSQL 15 + Docker\n\n**Prerequisites:**\n1. Docker running: `docker-compose up -d`\n2. Server running: `mvn spring-boot:run`\n3. Database initialized with test data",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Test 1 - Get all savings goals for user 1",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test(\"Status code is 200\", function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "",
+              "pm.test(\"Response has data\", function () {",
+              "    var jsonData = pm.response.json();",
+              "    pm.expect(jsonData.data).to.exist;",
+              "    pm.expect(jsonData.data.savingsGoals).to.be.an('array');",
+              "});",
+              "",
+              "pm.test(\"User 1 has savings goals\", function () {",
+              "    var jsonData = pm.response.json();",
+              "    pm.expect(jsonData.data.savingsGoals.length).to.be.above(0);",
+              "});",
+              "",
+              "pm.test(\"Goals have required fields\", function () {",
+              "    var jsonData = pm.response.json();",
+              "    var goal = jsonData.data.savingsGoals[0];",
+              "    pm.expect(goal).to.have.property('id');",
+              "    pm.expect(goal).to.have.property('name');",
+              "    pm.expect(goal).to.have.property('targetAmount');",
+              "    pm.expect(goal).to.have.property('currentAmount');",
+              "    pm.expect(goal).to.have.property('progressPercentage');",
+              "    pm.expect(goal).to.have.property('category');",
+              "    pm.expect(goal).to.have.property('status');",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "graphql",
+          "graphql": {
+            "query": "{\n  savingsGoals(userId: \"1\") {\n    id\n    name\n    targetAmount\n    currentAmount\n    progressPercentage\n    category\n    status\n  }\n}",
+            "variables": ""
+          }
+        },
+        "url": {
+          "raw": "{{GRAPHQL_ENDPOINT}}",
+          "host": [
+            "{{GRAPHQL_ENDPOINT}}"
+          ]
+        },
+        "description": "**Query Test**\n\nFetches all savings goals for user 1.\n\nExpected: Emergency Fund, Japan Vacation, MacBook Pro (COMPLETED)"
+      },
+      "response": []
+    },
+    {
+      "name": "Test 2 - Get active savings goals only",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test(\"Status code is 200\", function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "",
+              "pm.test(\"All goals are ACTIVE\", function () {",
+              "    var jsonData = pm.response.json();",
+              "    jsonData.data.activeSavingsGoals.forEach(goal => {",
+              "        pm.expect(goal.status).to.eql('ACTIVE');",
+              "    });",
+              "});",
+              "",
+              "pm.test(\"COMPLETED goals are filtered out\", function () {",
+              "    var jsonData = pm.response.json();",
+              "    var completedCount = jsonData.data.activeSavingsGoals.filter(g => g.status === 'COMPLETED').length;",
+              "    pm.expect(completedCount).to.eql(0);",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "graphql",
+          "graphql": {
+            "query": "{\n  activeSavingsGoals(userId: \"1\") {\n    id\n    name\n    currentAmount\n    targetAmount\n    progressPercentage\n    status\n  }\n}",
+            "variables": ""
+          }
+        },
+        "url": {
+          "raw": "{{GRAPHQL_ENDPOINT}}",
+          "host": [
+            "{{GRAPHQL_ENDPOINT}}"
+          ]
+        },
+        "description": "**Filtering Test**\n\nFetches only ACTIVE goals (excludes COMPLETED/PAUSED/CANCELLED).\n\nExpected: Only Emergency Fund and Japan Vacation"
+      },
+      "response": []
+    },
+    {
+      "name": "Test 3 - Get specific savings goal by ID",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test(\"Status code is 200\", function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "",
+              "pm.test(\"Goal ID is 1\", function () {",
+              "    var jsonData = pm.response.json();",
+              "    pm.expect(jsonData.data.savingsGoal.id).to.eql('1');",
+              "});",
+              "",
+              "pm.test(\"Goal has description\", function () {",
+              "    var jsonData = pm.response.json();",
+              "    pm.expect(jsonData.data.savingsGoal.description).to.exist;",
+              "});",
+              "",
+              "pm.test(\"Goal is Emergency Fund\", function () {",
+              "    var jsonData = pm.response.json();",
+              "    pm.expect(jsonData.data.savingsGoal.name).to.eql('Emergency Fund');",
+              "    pm.expect(jsonData.data.savingsGoal.category).to.eql('EMERGENCY_FUND');",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "graphql",
+          "graphql": {
+            "query": "{\n  savingsGoal(id: \"1\") {\n    id\n    name\n    description\n    targetAmount\n    currentAmount\n    progressPercentage\n    category\n    status\n  }\n}",
+            "variables": ""
+          }
+        },
+        "url": {
+          "raw": "{{GRAPHQL_ENDPOINT}}",
+          "host": [
+            "{{GRAPHQL_ENDPOINT}}"
+          ]
+        },
+        "description": "**Single Goal Query**\n\nFetches a specific goal by ID.\n\nExpected: Emergency Fund with full details"
+      },
+      "response": []
+    },
+    {
+      "name": "Test 4 - Get savings goals for user 2",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test(\"Status code is 200\", function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "",
+              "pm.test(\"User 2 has goals\", function () {",
+              "    var jsonData = pm.response.json();",
+              "    pm.expect(jsonData.data.savingsGoals).to.be.an('array');",
+              "    pm.expect(jsonData.data.savingsGoals.length).to.be.above(0);",
+              "});",
+              "",
+              "pm.test(\"Contains Home Down Payment\", function () {",
+              "    var jsonData = pm.response.json();",
+              "    var hasHomeGoal = jsonData.data.savingsGoals.some(g => g.name === 'Home Down Payment');",
+              "    pm.expect(hasHomeGoal).to.be.true;",
+              "});",
+              "",
+              "pm.test(\"Contains Education Fund\", function () {",
+              "    var jsonData = pm.response.json();",
+              "    var hasEducation = jsonData.data.savingsGoals.some(g => g.category === 'EDUCATION');",
+              "    pm.expect(hasEducation).to.be.true;",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "graphql",
+          "graphql": {
+            "query": "{\n  savingsGoals(userId: \"2\") {\n    id\n    name\n    targetAmount\n    currentAmount\n    progressPercentage\n    category\n    status\n  }\n}",
+            "variables": ""
+          }
+        },
+        "url": {
+          "raw": "{{GRAPHQL_ENDPOINT}}",
+          "host": [
+            "{{GRAPHQL_ENDPOINT}}"
+          ]
+        },
+        "description": "**Multi-user Test**\n\nFetches goals for a different user.\n\nExpected: Home Down Payment ($25k/$80k) and Kids Education ($15k/$100k)"
+      },
+      "response": []
+    },
+    {
+      "name": "Test 5 - Create new savings goal (Tesla)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test(\"Status code is 200\", function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "",
+              "pm.test(\"Mutation was successful\", function () {",
+              "    var jsonData = pm.response.json();",
+              "    pm.expect(jsonData.data.createSavingsGoal.success).to.be.true;",
+              "});",
+              "",
+              "pm.test(\"Goal was created with correct data\", function () {",
+              "    var jsonData = pm.response.json();",
+              "    var goal = jsonData.data.createSavingsGoal.goal;",
+              "    pm.expect(goal.name).to.eql('Tesla Model 3');",
+              "    pm.expect(goal.targetAmount).to.eql(50000);",
+              "    pm.expect(goal.category).to.eql('OTHER');",
+              "    pm.expect(goal.status).to.eql('ACTIVE');",
+              "});",
+              "",
+              "pm.test(\"Goal starts at 0% progress\", function () {",
+              "    var jsonData = pm.response.json();",
+              "    pm.expect(jsonData.data.createSavingsGoal.goal.currentAmount).to.eql(0);",
+              "    pm.expect(jsonData.data.createSavingsGoal.goal.progressPercentage).to.eql(0);",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "graphql",
+          "graphql": {
+            "query": "mutation {\n  createSavingsGoal(input: {\n    userId: \"1\"\n    name: \"Tesla Model 3\"\n    description: \"Electric car savings\"\n    targetAmount: 50000\n    category: OTHER\n  }) {\n    success\n    message\n    goal {\n      id\n      name\n      targetAmount\n      currentAmount\n      progressPercentage\n      category\n      status\n    }\n  }\n}",
+            "variables": ""
+          }
+        },
+        "url": {
+          "raw": "{{GRAPHQL_ENDPOINT}}",
+          "host": [
+            "{{GRAPHQL_ENDPOINT}}"
+          ]
+        },
+        "description": "**Mutation Test**\n\nCreates a new savings goal for user 1.\n\nValidates:\n- Success response\n- Goal created with correct data\n- Initial values (currentAmount=0, status=ACTIVE)"
+      },
+      "response": []
+    },
+    {
+      "name": "Test 6 - Verify created goal exists",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test(\"Status code is 200\", function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "",
+              "pm.test(\"Tesla Model 3 exists in results\", function () {",
+              "    var jsonData = pm.response.json();",
+              "    var hasTesla = jsonData.data.savingsGoals.some(g => g.name === 'Tesla Model 3');",
+              "    pm.expect(hasTesla).to.be.true;",
+              "});",
+              "",
+              "pm.test(\"User now has multiple OTHER category goals\", function () {",
+              "    var jsonData = pm.response.json();",
+              "    var otherGoals = jsonData.data.savingsGoals.filter(g => g.category === 'OTHER');",
+              "    pm.expect(otherGoals.length).to.be.above(1);",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "graphql",
+          "graphql": {
+            "query": "{\n  savingsGoals(userId: \"1\") {\n    id\n    name\n    category\n    status\n  }\n}",
+            "variables": ""
+          }
+        },
+        "url": {
+          "raw": "{{GRAPHQL_ENDPOINT}}",
+          "host": [
+            "{{GRAPHQL_ENDPOINT}}"
+          ]
+        },
+        "description": "**Persistence Verification**\n\nVerifies that the goal created in Test 5 now appears in queries.\n\nExpected: Tesla Model 3 is in the list"
+      },
+      "response": []
+    },
+    {
+      "name": "Test 7 - Get user 3 goals (includes PAUSED)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test(\"Status code is 200\", function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "",
+              "pm.test(\"User 3 has goals\", function () {",
+              "    var jsonData = pm.response.json();",
+              "    pm.expect(jsonData.data.savingsGoals).to.be.an('array');",
+              "    pm.expect(jsonData.data.savingsGoals.length).to.be.above(0);",
+              "});",
+              "",
+              "pm.test(\"Contains PAUSED goal\", function () {",
+              "    var jsonData = pm.response.json();",
+              "    var pausedGoals = jsonData.data.savingsGoals.filter(g => g.status === 'PAUSED');",
+              "    pm.expect(pausedGoals.length).to.be.above(0);",
+              "});",
+              "",
+              "pm.test(\"Cruise Trip is PAUSED\", function () {",
+              "    var jsonData = pm.response.json();",
+              "    var cruise = jsonData.data.savingsGoals.find(g => g.name === 'Cruise Trip');",
+              "    pm.expect(cruise).to.exist;",
+              "    pm.expect(cruise.status).to.eql('PAUSED');",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "graphql",
+          "graphql": {
+            "query": "{\n  savingsGoals(userId: \"3\") {\n    id\n    name\n    targetAmount\n    currentAmount\n    progressPercentage\n    category\n    status\n  }\n}",
+            "variables": ""
+          }
+        },
+        "url": {
+          "raw": "{{GRAPHQL_ENDPOINT}}",
+          "host": [
+            "{{GRAPHQL_ENDPOINT}}"
+          ]
+        },
+        "description": "**Status Test**\n\nValidates that PAUSED goals are returned in general queries.\n\nExpected: Retirement, Investment Portfolio (ACTIVE), Cruise Trip (PAUSED)"
+      },
+      "response": []
+    },
+    {
+      "name": "Test 8 - Validate progress calculation (100%)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test(\"Status code is 200\", function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "",
+              "pm.test(\"Progress is 100%\", function () {",
+              "    var jsonData = pm.response.json();",
+              "    var progress = jsonData.data.savingsGoal.progressPercentage;",
+              "    pm.expect(progress).to.be.oneOf([100, 100.0]);",
+              "});",
+              "",
+              "pm.test(\"Current equals target\", function () {",
+              "    var jsonData = pm.response.json();",
+              "    var goal = jsonData.data.savingsGoal;",
+              "    pm.expect(goal.currentAmount).to.eql(goal.targetAmount);",
+              "});",
+              "",
+              "pm.test(\"Goal is MacBook Pro\", function () {",
+              "    var jsonData = pm.response.json();",
+              "    pm.expect(jsonData.data.savingsGoal.name).to.eql('New MacBook Pro');",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "graphql",
+          "graphql": {
+            "query": "{\n  savingsGoal(id: \"3\") {\n    name\n    targetAmount\n    currentAmount\n    progressPercentage\n  }\n}",
+            "variables": ""
+          }
+        },
+        "url": {
+          "raw": "{{GRAPHQL_ENDPOINT}}",
+          "host": [
+            "{{GRAPHQL_ENDPOINT}}"
+          ]
+        },
+        "description": "**Calculated Field Test**\n\nValidates that progressPercentage is calculated correctly.\n\nExpected: MacBook Pro with 100% progress ($3,500 / $3,500)"
+      },
+      "response": []
+    },
+    {
+      "name": "Test 9 - Verify active goals filtering (no PAUSED)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test(\"Status code is 200\", function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "",
+              "pm.test(\"All goals are ACTIVE\", function () {",
+              "    var jsonData = pm.response.json();",
+              "    jsonData.data.activeSavingsGoals.forEach(goal => {",
+              "        pm.expect(goal.status).to.eql('ACTIVE');",
+              "    });",
+              "});",
+              "",
+              "pm.test(\"No PAUSED goals in results\", function () {",
+              "    var jsonData = pm.response.json();",
+              "    var pausedCount = jsonData.data.activeSavingsGoals.filter(g => g.status === 'PAUSED').length;",
+              "    pm.expect(pausedCount).to.eql(0);",
+              "});",
+              "",
+              "pm.test(\"User 3 has ACTIVE goals\", function () {",
+              "    var jsonData = pm.response.json();",
+              "    pm.expect(jsonData.data.activeSavingsGoals.length).to.be.above(0);",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "graphql",
+          "graphql": {
+            "query": "{\n  activeSavingsGoals(userId: \"3\") {\n    name\n    status\n  }\n}",
+            "variables": ""
+          }
+        },
+        "url": {
+          "raw": "{{GRAPHQL_ENDPOINT}}",
+          "host": [
+            "{{GRAPHQL_ENDPOINT}}"
+          ]
+        },
+        "description": "**Filtering Validation**\n\nConfirms that activeSavingsGoals correctly excludes PAUSED goals.\n\nExpected: Only Retirement and Investment Portfolio (no Cruise Trip)"
+      },
+      "response": []
+    },
+    {
+      "name": "Test 10 - Create goal with minimal fields",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test(\"Status code is 200\", function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "",
+              "pm.test(\"Mutation was successful\", function () {",
+              "    var jsonData = pm.response.json();",
+              "    pm.expect(jsonData.data.createSavingsGoal.success).to.be.true;",
+              "});",
+              "",
+              "pm.test(\"Goal created without description\", function () {",
+              "    var jsonData = pm.response.json();",
+              "    var goal = jsonData.data.createSavingsGoal.goal;",
+              "    pm.expect(goal.description).to.be.null;",
+              "});",
+              "",
+              "pm.test(\"Goal has required fields only\", function () {",
+              "    var jsonData = pm.response.json();",
+              "    var goal = jsonData.data.createSavingsGoal.goal;",
+              "    pm.expect(goal.name).to.eql('Vacation Fund');",
+              "    pm.expect(goal.currentAmount).to.eql(0);",
+              "    pm.expect(goal.status).to.eql('ACTIVE');",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "graphql",
+          "graphql": {
+            "query": "mutation {\n  createSavingsGoal(input: {\n    userId: \"2\"\n    name: \"Vacation Fund\"\n    targetAmount: 10000\n    category: VACATION\n  }) {\n    success\n    message\n    goal {\n      id\n      name\n      description\n      currentAmount\n      status\n    }\n  }\n}",
+            "variables": ""
+          }
+        },
+        "url": {
+          "raw": "{{GRAPHQL_ENDPOINT}}",
+          "host": [
+            "{{GRAPHQL_ENDPOINT}}"
+          ]
+        },
+        "description": "**Optional Fields Test**\n\nCreates a goal without the optional description field.\n\nValidates:\n- Mutation succeeds with minimal required fields\n- Optional fields default to null\n- Goal is created with correct defaults"
+      },
+      "response": []
+    }
+  ],
+  "variable": [
+    {
+      "key": "GRAPHQL_ENDPOINT",
+      "value": "http://localhost:8080/graphql",
+      "type": "string"
+    },
+    {
+      "key": "BASE_URL",
+      "value": "http://localhost:8080",
+      "type": "string"
+    }
+  ]
+}

@@ -1,0 +1,211 @@
+# ========================================
+# CASHBACK REWARDS SERVICE - GraphQL Schema
+# ========================================
+# Chapter 03: Implementación de GraphQL con DGS (Netflix Java)
+# Feature: Sistema de recompensas cashback para NeoBank
+# ========================================
+
+# ========================================
+# CUSTOM SCALARS
+# ========================================
+scalar Date
+scalar DateTime
+scalar Money
+
+# ========================================
+# ENUMS
+# ========================================
+
+enum RewardStatus {
+    PENDING
+    ACTIVE
+    EXPIRED
+    REDEEMED
+    CANCELLED
+}
+
+enum TransactionCategory {
+    GROCERIES
+    RESTAURANTS
+    TRANSPORTATION
+    ENTERTAINMENT
+    SHOPPING
+    HEALTH
+    TRAVEL
+    UTILITIES
+    EDUCATION
+    OTHER
+}
+
+enum RewardTier {
+    BRONZE
+    SILVER
+    GOLD
+    PLATINUM
+}
+
+# ========================================
+# DOMAIN TYPES
+# ========================================
+
+type User {
+    id: ID!
+    email: String!
+    fullName: String!
+    tier: RewardTier!
+    totalCashbackEarned: Money!
+    availableCashback: Money!
+    createdAt: DateTime!
+    rewards: [Reward!]!
+}
+
+type Reward {
+    id: ID!
+    userId: ID!
+    user: User!
+    amount: Money!
+    earnedAt: DateTime!
+    expiresAt: DateTime
+    status: RewardStatus!
+    category: TransactionCategory!
+    transactionId: ID!
+    description: String
+    multiplier: Float!
+}
+
+type CashbackRule {
+    id: ID!
+    category: TransactionCategory!
+    basePercentage: Float!
+    tierMultipliers: TierMultipliers!
+    minTransactionAmount: Money
+    maxCashbackPerTransaction: Money
+    isActive: Boolean!
+}
+
+type TierMultipliers {
+    bronze: Float!
+    silver: Float!
+    gold: Float!
+    platinum: Float!
+}
+
+type RewardsSummary {
+    userId: ID!
+    totalEarned: Money!
+    totalRedeemed: Money!
+    totalExpired: Money!
+    availableBalance: Money!
+    rewardsByCategory: [CategorySummary!]!
+    rewardsByStatus: [StatusSummary!]!
+}
+
+type CategorySummary {
+    category: TransactionCategory!
+    totalAmount: Money!
+    count: Int!
+}
+
+type StatusSummary {
+    status: RewardStatus!
+    totalAmount: Money!
+    count: Int!
+}
+
+type RedemptionResult {
+    success: Boolean!
+    message: String!
+    redeemedAmount: Money
+    newBalance: Money
+    transactionId: ID
+}
+
+# ========================================
+# INPUT TYPES
+# ========================================
+
+input CreateRewardInput {
+    userId: ID!
+    transactionId: ID!
+    transactionAmount: Money!
+    category: TransactionCategory!
+    description: String
+}
+
+input RedeemCashbackInput {
+    userId: ID!
+    amount: Money!
+    destinationAccount: String!
+}
+
+input UpdateRewardStatusInput {
+    rewardId: ID!
+    newStatus: RewardStatus!
+    reason: String
+}
+
+input RewardsFilterInput {
+    userId: ID
+    status: RewardStatus
+    category: TransactionCategory
+    minAmount: Money
+    maxAmount: Money
+    earnedAfter: DateTime
+    earnedBefore: DateTime
+}
+
+# ========================================
+# QUERIES
+# ========================================
+
+type Query {
+    # Query básica - obtener usuario por ID
+    user(id: ID!): User
+    
+    # Query con filtros - listar usuarios por tier
+    usersByTier(tier: RewardTier!): [User!]!
+    
+    # Query de reward individual
+    reward(id: ID!): Reward
+    
+    # Query con filtros complejos
+    rewards(filter: RewardsFilterInput): [Reward!]!
+    
+    # Query anidada - rewards de un usuario
+    userRewards(userId: ID!, status: RewardStatus): [Reward!]!
+    
+    # Query agregada - resumen de cashback
+    rewardsSummary(userId: ID!): RewardsSummary
+    
+    # Query de reglas de cashback
+    cashbackRules: [CashbackRule!]!
+    cashbackRule(category: TransactionCategory!): CashbackRule
+    
+    # Query para calcular cashback estimado
+    calculateCashback(
+        userId: ID!
+        transactionAmount: Money!
+        category: TransactionCategory!
+    ): Money!
+}
+
+# ========================================
+# MUTATIONS
+# ========================================
+
+type Mutation {
+    # Crear reward automáticamente basado en transacción
+    createReward(input: CreateRewardInput!): Reward!
+    
+    # Redimir cashback disponible
+    redeemCashback(input: RedeemCashbackInput!): RedemptionResult!
+    
+    # Actualizar estado de reward (admin)
+    updateRewardStatus(input: UpdateRewardStatusInput!): Reward!
+    
+    # Expirar rewards vencidos (batch operation)
+    expireOldRewards: Int!
+    
+    # Upgrade de tier de usuario
+    upgradeUserTier(userId: ID!, newTier: RewardTier!): User!
+}

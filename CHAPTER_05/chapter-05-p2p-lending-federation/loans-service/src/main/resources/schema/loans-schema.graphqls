@@ -1,0 +1,83 @@
+extend schema 
+  @link(url: "https://specs.apollo.dev/federation/v2.3", import: ["@key", "@external", "@requires", "@provides"])
+
+"""
+User - Referencia externa desde el subgrafo Users
+Usamos @extends para agregar campos al tipo User
+"""
+type User @key(fields: "id") @extends {
+  id: ID! @external
+  
+  """
+  Préstamos donde el usuario es prestamista
+  Campo agregado por el subgrafo Loans
+  """
+  loansAsLender: [Loan!]!
+  
+  """
+  Préstamos donde el usuario es prestatario
+  Campo agregado por el subgrafo Loans
+  """
+  loansAsBorrower: [Loan!]!
+}
+
+"""
+Loan - Entidad principal del dominio Loans
+"""
+type Loan @key(fields: "id") {
+  id: ID!
+  amount: Float!
+  interestRate: Float!
+  term: Int!
+  status: LoanStatus!
+  purpose: String!
+  
+  """
+  Prestamista - Referencia a User del otro subgrafo
+  """
+  lender: User!
+  
+  """
+  Prestatario - Referencia a User del otro subgrafo
+  """
+  borrower: User!
+  
+  createdAt: String!
+  fundedAt: String
+  monthlyPayment: Float!
+  totalRepayment: Float!
+}
+
+enum LoanStatus {
+  PENDING
+  FUNDED
+  ACTIVE
+  COMPLETED
+  DEFAULTED
+}
+
+type Query {
+  loan(id: ID!): Loan
+  loans: [Loan!]!
+  loansByStatus(status: LoanStatus!): [Loan!]!
+  availableLoans: [Loan!]!
+}
+
+type Mutation {
+  createLoanRequest(input: CreateLoanInput!): LoanResponse!
+  fundLoan(loanId: ID!, lenderId: ID!): LoanResponse!
+}
+
+input CreateLoanInput {
+  borrowerId: ID!
+  amount: Float!
+  interestRate: Float!
+  term: Int!
+  purpose: String!
+}
+
+type LoanResponse {
+  success: Boolean!
+  message: String!
+  loan: Loan
+}

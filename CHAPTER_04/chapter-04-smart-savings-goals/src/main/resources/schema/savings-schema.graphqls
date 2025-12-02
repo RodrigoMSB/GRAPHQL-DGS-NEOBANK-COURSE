@@ -1,0 +1,54 @@
+scalar Money
+
+enum GoalStatus {
+  ACTIVE
+  PAUSED
+  COMPLETED
+  CANCELLED
+}
+
+enum GoalCategory {
+  EMERGENCY_FUND
+  VACATION
+  HOME_PURCHASE
+  EDUCATION
+  RETIREMENT
+  INVESTMENT
+  OTHER
+}
+
+type SavingsGoal {
+  id: ID!
+  userId: ID!
+  name: String!
+  description: String
+  targetAmount: Money!
+  currentAmount: Money!
+  category: GoalCategory!
+  status: GoalStatus!
+  progressPercentage: Float!
+}
+
+type Query {
+  savingsGoal(id: ID!): SavingsGoal
+  savingsGoals(userId: ID!): [SavingsGoal!]!
+  activeSavingsGoals(userId: ID!): [SavingsGoal!]!
+}
+
+type Mutation {
+  createSavingsGoal(input: CreateSavingsGoalInput!): SavingsGoalResponse!
+}
+
+input CreateSavingsGoalInput {
+  userId: ID!
+  name: String!
+  description: String
+  targetAmount: Float!
+  category: GoalCategory!
+}
+
+type SavingsGoalResponse {
+  success: Boolean!
+  message: String!
+  goal: SavingsGoal
+}

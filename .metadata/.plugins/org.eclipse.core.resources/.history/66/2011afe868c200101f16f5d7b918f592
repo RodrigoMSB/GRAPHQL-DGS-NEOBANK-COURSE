@@ -1,5 +1,0 @@
-package com.neobank.portfolio.graphql;
-
-public class AssetQueryResolver {
-
-}

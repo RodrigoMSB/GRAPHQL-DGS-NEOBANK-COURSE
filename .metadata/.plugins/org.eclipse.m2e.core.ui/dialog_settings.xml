@@ -2,6 +2,11 @@
 <section name="Workbench">
 	<section name="MavenProjectImportWizardPage">
 		<list key="rootDirectory">
+			<item value="/Users/rodrigosilva/GRAPHQL/GRAPHQL-DGS-NEOBANK-COURSE/CHAPTER_03/ch03-cashback-dgs-service"/>
+			<item value="/Users/rodrigosilva/GRAPHQL/GRAPHQL-DGS-NEOBANK-COURSE/CHAPTER_02/ch02-cashback-schema-design"/>
+			<item value="/Users/rodrigosilva/GRAPHQL/GRAPHQL-DGS-NEOBANK-COURSE/CHAPTER_01/ch01-investment-portfolio"/>
+			<item value="/Users/rodrigosilva/GRAPHQL/GRAPHQL-DGS-NEOBANK-COURSE/CHAPTER_03/dgs-cashback-service"/>
+			<item value="/Users/rodrigosilva/GRAPHQL/GRAPHQL-DGS-NEOBANK-COURSE/CHAPTER_02/cashback-schema-design"/>
 			<item value="/Users/rodrigosilva/GRAPHQL/GRAPHQL-DGS-NEOBANK-COURSE/CHAPTER_01/investment-portfolio-graphql"/>
 		</list>
 		<list key="projectNameTemplate">
@@ -12,5 +17,9 @@
 			<item value="[groupId].[artifactId]-[version]"/>
 			<item value="[name]"/>
 		</list>
+	</section>
+	<section name="org.eclipse.m2e.core.pom.overview">
+	</section>
+	<section name="org.eclipse.m2e.core.pom.dependencies">
 	</section>
 </section>

@@ -1,0 +1,18 @@
+spring:
+  application:
+    name: loans-service
+
+server:
+  port: 8082
+
+dgs:
+  graphql:
+    path: /graphql
+    graphiql:
+      enabled: true
+      path: /graphiql
+
+logging:
+  level:
+    com.neobank.loans: DEBUG
+    com.netflix.graphql.dgs: DEBUG

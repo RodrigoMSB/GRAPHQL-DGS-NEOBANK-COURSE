@@ -1,0 +1,33 @@
+spring:
+  application:
+    name: dgs-cashback-service
+  
+server:
+  port: 8080
+
+# Configuración de DGS
+dgs:
+  graphql:
+    # Path del schema GraphQL
+    schema-locations:
+      - classpath:schema/**/*.graphqls
+    
+    # Habilitar GraphiQL UI
+    graphiql:
+      enabled: true
+      path: /graphiql
+    
+    # Configuración de introspection (útil para desarrollo)
+    introspection:
+      enabled: true
+    
+    # Configuración de playground
+    playground:
+      enabled: true
+      path: /playground
+
+# Logging
+logging:
+  level:
+    com.neobank.cashback: DEBUG
+    com.netflix.graphql.dgs: INFO

@@ -1,0 +1,164 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 
+         http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-parent</artifactId>
+        <version>3.4.5</version>
+        <relativePath/>
+    </parent>
+
+    <groupId>com.neobank</groupId>
+    <artifactId>ch03-cashback-dgs-service</artifactId>
+    <version>1.0.0</version>
+    <name>NeoBank - DGS Cashback Service</name>
+    <description>Chapter 03: GraphQL Implementation with Netflix DGS Framework</description>
+
+    <properties>
+        <java.version>17</java.version>
+        <dgs.version>8.1.1</dgs.version>
+    </properties>
+
+    <dependencies>
+        <!-- Spring Boot Web -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
+        </dependency>
+
+        <!-- Netflix DGS Framework -->
+        <dependency>
+            <groupId>com.netflix.graphql.dgs</groupId>
+            <artifactId>graphql-dgs-spring-boot-starter</artifactId>
+            <version>${dgs.version}</version>
+        </dependency>
+
+        <!-- DGS Extended Scalars (para tipos custom como Date, DateTime, etc) -->
+        <dependency>
+            <groupId>com.netflix.graphql.dgs</groupId>
+            <artifactId>graphql-dgs-extended-scalars</artifactId>
+            <version>${dgs.version}</version>
+        </dependency>
+
+        <!-- Spring Boot Test -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <!-- Spring Boot Maven Plugin -->
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+            </plugin>
+
+            <!-- ================================================================ -->
+            <!-- DGS CODEGEN PLUGIN - Generación automática de clases Java       -->
+            <!-- ================================================================ -->
+            <!-- 
+                Este plugin lee el schema GraphQL y genera automáticamente:
+                - DTOs para todos los types (User, Reward, CashbackRule, etc.)
+                - Input classes (CreateRewardInput, RewardsFilterInput, etc.)
+                - Enums (RewardStatus, TransactionCategory, RewardTier, etc.)
+                
+                Beneficios:
+                ✅ Type safety completo
+                ✅ Contrato vivo entre schema y código
+                ✅ Menos boilerplate manual
+                ✅ Refactoring seguro
+                
+                Ubicación de clases generadas:
+                target/generated-sources/dgs-codegen/
+            -->
+            <plugin>
+                <groupId>io.github.deweyjose</groupId>
+                <artifactId>graphqlcodegen-maven-plugin</artifactId>
+                <version>1.50</version>
+                <executions>
+                    <execution>
+                        <id>dgs-codegen</id>
+                        <goals>
+                            <goal>generate</goal>
+                        </goals>
+                        <configuration>
+                            <!-- Ubicación del schema GraphQL -->
+                            <schemaPaths>
+                                <param>src/main/resources/schema/cashback-service.graphqls</param>
+                            </schemaPaths>
+                            
+                            <!-- Package donde se generarán las clases -->
+                            <packageName>com.neobank.cashback.generated</packageName>
+                            
+                            <!-- Directorio de salida -->
+                            <outputDir>${project.build.directory}/generated-sources/dgs-codegen</outputDir>
+                            
+                            <!-- Generar clases para client-side (queries/mutations) -->
+                            <generateClient>true</generateClient>
+                            
+                            <!-- Generar clases para tipos del schema -->
+                            <generateDataTypes>true</generateDataTypes>
+                            
+                            <!-- Tipo a usar para IDs (String por defecto) -->
+                            <typeMapping>
+                                <ID>java.lang.String</ID>
+                                <DateTime>java.time.LocalDateTime</DateTime>
+                                <Date>java.time.LocalDate</Date>
+                                <Money>java.math.BigDecimal</Money>
+                            </typeMapping>
+                            
+                            <!-- Agregar anotaciones para serialización JSON -->
+                            <addGeneratedAnnotation>true</addGeneratedAnnotation>
+                            
+                            <!-- Generar interfaces para types -->
+                            <generateInterfaces>false</generateInterfaces>
+                            
+                            <!-- Generar builders para DTOs -->
+                            <generateDataFetchers>false</generateDataFetchers>
+                            
+                            <!-- Solo generar types, inputs y enums -->
+                            <skipEntityQueries>true</skipEntityQueries>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+
+            <!-- ================================================================ -->
+            <!-- Build Helper Plugin - Agrega source folder de clases generadas  -->
+            <!-- ================================================================ -->
+            <!--
+                Este plugin le dice a Maven que las clases generadas por codegen
+                son código fuente válido y deben ser compiladas.
+                
+                Sin esto, IntelliJ/Eclipse no reconocerían las clases generadas.
+            -->
+            <plugin>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>build-helper-maven-plugin</artifactId>
+                <version>3.5.0</version>
+                <executions>
+                    <execution>
+                        <id>add-dgs-source</id>
+                        <phase>generate-sources</phase>
+                        <goals>
+                            <goal>add-source</goal>
+                        </goals>
+                        <configuration>
+                            <sources>
+                                <source>${project.build.directory}/generated-sources/dgs-codegen</source>
+                            </sources>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
+
+</project>

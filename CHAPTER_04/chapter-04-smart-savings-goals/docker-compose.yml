@@ -1,0 +1,15 @@
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: neobank-savings-db
+    environment:
+      POSTGRES_DB: savingsdb
+      POSTGRES_USER: neobank
+      POSTGRES_PASSWORD: neobank123
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+volumes:
+  postgres_data:

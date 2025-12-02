@@ -1,0 +1,81 @@
+extend schema 
+  @link(url: "https://specs.apollo.dev/federation/v2.3", import: ["@key", "@shareable"])
+
+"""
+User - Entidad principal del dominio Users
+Marcada con @key para permitir referencias desde otros subgrafos
+"""
+type User @key(fields: "id") {
+  id: ID!
+  email: String!
+  fullName: String!
+  userType: UserType!
+  lenderProfile: LenderProfile
+  borrowerProfile: BorrowerProfile
+  createdAt: String!
+  reputation: Float!
+}
+
+"""
+Perfil de prestamista (Lender)
+"""
+type LenderProfile {
+  totalLent: Float!
+  activeLoans: Int!
+  averageReturn: Float!
+  riskTolerance: RiskTolerance!
+  verified: Boolean!
+}
+
+"""
+Perfil de prestatario (Borrower)
+"""
+type BorrowerProfile {
+  creditScore: Int!
+  totalBorrowed: Float!
+  activeLoans: Int!
+  defaultRate: Float!
+  verified: Boolean!
+  kycStatus: KYCStatus!
+}
+
+enum UserType {
+  LENDER
+  BORROWER
+  BOTH
+}
+
+enum RiskTolerance {
+  CONSERVATIVE
+  MODERATE
+  AGGRESSIVE
+}
+
+enum KYCStatus {
+  PENDING
+  VERIFIED
+  REJECTED
+}
+
+type Query {
+  user(id: ID!): User
+  users: [User!]!
+  verifiedLenders: [User!]!
+  verifiedBorrowers: [User!]!
+}
+
+type Mutation {
+  createUser(input: CreateUserInput!): UserResponse!
+}
+
+input CreateUserInput {
+  email: String!
+  fullName: String!
+  userType: UserType!
+}
+
+type UserResponse {
+  success: Boolean!
+  message: String!
+  user: User
+}
