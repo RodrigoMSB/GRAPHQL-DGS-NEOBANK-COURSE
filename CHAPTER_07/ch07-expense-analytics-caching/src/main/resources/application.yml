@@ -1,0 +1,21 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: expense-analytics-service
+  cache:
+    type: caffeine
+    caffeine:
+      spec: maximumSize=1000,expireAfterWrite=300s
+
+dgs:
+  graphql:
+    graphiql:
+      enabled: true
+      path: /graphiql
+
+logging:
+  level:
+    com.neobank.analytics: DEBUG
+    com.netflix.graphql.dgs: INFO

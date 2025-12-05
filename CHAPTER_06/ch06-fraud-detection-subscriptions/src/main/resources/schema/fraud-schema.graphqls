@@ -1,0 +1,98 @@
+"""
+Transaction - Transacción bancaria
+"""
+type Transaction {
+  id: ID!
+  accountId: String!
+  amount: Float!
+  currency: String!
+  merchantName: String!
+  category: String!
+  location: String!
+  timestamp: String!
+  riskScore: Float!
+  status: TransactionStatus!
+}
+
+enum TransactionStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  FLAGGED
+}
+
+"""
+FraudAlert - Alerta de fraude en tiempo real
+"""
+type FraudAlert {
+  id: ID!
+  transaction: Transaction!
+  riskLevel: RiskLevel!
+  reasons: [String!]!
+  detectedAt: String!
+  recommendedAction: String!
+}
+
+enum RiskLevel {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+type Query {
+  """
+  Obtener una transacción por ID
+  """
+  transaction(id: ID!): Transaction
+  
+  """
+  Obtener todas las transacciones de una cuenta
+  """
+  transactions(accountId: String!): [Transaction!]!
+  
+  """
+  Obtener alertas de fraude de una cuenta
+  """
+  fraudAlerts(accountId: String!): [FraudAlert!]!
+}
+
+type Mutation {
+  """
+  Procesar una nueva transacción (trigger detección de fraude)
+  """
+  processTransaction(input: TransactionInput!): TransactionResponse!
+}
+
+"""
+Subscription - Notificaciones en tiempo real
+"""
+type Subscription {
+  """
+  Se dispara cuando se detecta una transacción sospechosa
+  Parámetro: accountId para filtrar por cuenta específica
+  """
+  fraudAlertDetected(accountId: String!): FraudAlert!
+  
+  """
+  Se dispara cuando cambia el estado de una transacción
+  Útil para monitoreo en tiempo real
+  """
+  transactionStatusChanged(accountId: String!): Transaction!
+}
+
+input TransactionInput {
+  accountId: String!
+  amount: Float!
+  currency: String!
+  merchantName: String!
+  category: String!
+  location: String!
+}
+
+type TransactionResponse {
+  success: Boolean!
+  message: String!
+  transaction: Transaction
+  fraudAlert: FraudAlert
+}

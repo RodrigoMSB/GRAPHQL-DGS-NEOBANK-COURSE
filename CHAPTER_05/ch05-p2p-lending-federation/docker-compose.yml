@@ -1,0 +1,71 @@
+services:
+  users-service:
+    build:
+      context: ./users-service
+      dockerfile: Dockerfile
+    container_name: neobank-users-service
+    ports:
+      - "8081:8081"
+    environment:
+      - SPRING_PROFILES_ACTIVE=docker
+      - SERVER_PORT=8081
+    networks:
+      - neobank-network
+    healthcheck:
+      test: ["CMD-SHELL", "curl -X POST -H 'Content-Type: application/json' -d '{\"query\":\"{__typename}\"}' http://localhost:8081/graphql || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
+
+  loans-service:
+    build:
+      context: ./loans-service
+      dockerfile: Dockerfile
+    container_name: neobank-loans-service
+    ports:
+      - "8082:8082"
+    environment:
+      - SPRING_PROFILES_ACTIVE=docker
+      - SERVER_PORT=8082
+    networks:
+      - neobank-network
+    depends_on:
+      users-service:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -X POST -H 'Content-Type: application/json' -d '{\"query\":\"{__typename}\"}' http://localhost:8082/graphql || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
+
+  gateway-service:
+    build:
+      context: ./gateway-service
+      dockerfile: Dockerfile
+    container_name: neobank-gateway-service
+    ports:
+      - "8080:8080"
+    environment:
+      - SPRING_PROFILES_ACTIVE=docker
+      - SUBGRAPHS_USERS_URL=http://users-service:8081/graphql
+      - SUBGRAPHS_LOANS_URL=http://loans-service:8082/graphql
+    networks:
+      - neobank-network
+    depends_on:
+      users-service:
+        condition: service_healthy
+      loans-service:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8080/graphiql || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 60s
+
+networks:
+  neobank-network:
+    driver: bridge
+    name: neobank-federation-network

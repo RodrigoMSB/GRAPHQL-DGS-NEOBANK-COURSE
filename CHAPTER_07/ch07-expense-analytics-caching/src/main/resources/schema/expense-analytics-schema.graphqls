@@ -1,0 +1,149 @@
+"""
+Expense - Gasto individual
+"""
+type Expense {
+  id: ID!
+  accountId: String!
+  amount: Float!
+  currency: String!
+  merchantName: String!
+  category: Category!
+  date: String!
+  description: String
+}
+
+"""
+Category - Categoría de gasto
+"""
+enum Category {
+  FOOD_DRINK
+  SHOPPING
+  TRANSPORTATION
+  ENTERTAINMENT
+  UTILITIES
+  HEALTHCARE
+  TRAVEL
+  OTHER
+}
+
+"""
+ExpenseSummary - Resumen agregado de gastos
+"""
+type ExpenseSummary {
+  totalAmount: Float!
+  averageAmount: Float!
+  count: Int!
+  category: Category
+  topMerchants: [MerchantStats!]!
+}
+
+"""
+MerchantStats - Estadísticas por comercio
+"""
+type MerchantStats {
+  merchantName: String!
+  totalSpent: Float!
+  transactionCount: Int!
+}
+
+"""
+MonthlyAnalytics - Análisis mensual
+"""
+type MonthlyAnalytics {
+  month: String!
+  totalSpent: Float!
+  byCategory: [CategoryBreakdown!]!
+  topExpense: Expense
+}
+
+"""
+CategoryBreakdown - Desglose por categoría
+"""
+type CategoryBreakdown {
+  category: Category!
+  amount: Float!
+  percentage: Float!
+}
+
+type Query {
+  """
+  Obtener gasto por ID
+  """
+  expense(id: ID!): Expense
+  
+  """
+  Obtener todos los gastos de una cuenta
+  """
+  expenses(accountId: String!): [Expense!]!
+  
+  """
+  Obtener gastos por categoría (usa DataLoader)
+  """
+  expensesByCategory(accountId: String!, category: Category!): [Expense!]!
+  
+  """
+  Resumen de gastos (CACHEADO - resolver-level)
+  """
+  expenseSummary(accountId: String!): ExpenseSummary!
+  
+  """
+  Resumen por categoría (CACHEADO)
+  """
+  expenseSummaryByCategory(accountId: String!, category: Category!): ExpenseSummary!
+  
+  """
+  Top comercios (CACHEADO - consulta frecuente)
+  """
+  topMerchants(accountId: String!, limit: Int): [MerchantStats!]!
+  
+  """
+  Análisis mensual (CACHEADO - cálculo costoso)
+  """
+  monthlyAnalytics(accountId: String!, year: Int!, month: Int!): MonthlyAnalytics!
+  
+  """
+  Comparación entre meses (usa cache de monthlyAnalytics)
+  """
+  compareMonths(
+    accountId: String!
+    year1: Int!
+    month1: Int!
+    year2: Int!
+    month2: Int!
+  ): MonthComparison!
+}
+
+type MonthComparison {
+  month1: MonthlyAnalytics!
+  month2: MonthlyAnalytics!
+  difference: Float!
+  percentageChange: Float!
+}
+
+type Mutation {
+  """
+  Crear nuevo gasto (invalida cache)
+  """
+  createExpense(input: ExpenseInput!): ExpenseResponse!
+  
+  """
+  Invalidar cache manualmente
+  """
+  invalidateCache(accountId: String!): Boolean!
+}
+
+input ExpenseInput {
+  accountId: String!
+  amount: Float!
+  currency: String!
+  merchantName: String!
+  category: Category!
+  date: String!
+  description: String
+}
+
+type ExpenseResponse {
+  success: Boolean!
+  message: String!
+  expense: Expense
+}

@@ -1,5 +1,6 @@
 extend schema 
-  @link(url: "https://specs.apollo.dev/federation/v2.3", import: ["@key", "@external", "@requires", "@provides"])
+  @link(url: "https://specs.apollo.dev/federation/v2.3", 
+        import: ["@key", "@external", "@extends", "@requires", "@provides"])
 
 """
 User - Referencia externa desde el subgrafo Users
@@ -7,13 +8,11 @@ Usamos @extends para agregar campos al tipo User
 """
 type User @key(fields: "id") @extends {
   id: ID! @external
-  
   """
   Préstamos donde el usuario es prestamista
   Campo agregado por el subgrafo Loans
   """
   loansAsLender: [Loan!]!
-  
   """
   Préstamos donde el usuario es prestatario
   Campo agregado por el subgrafo Loans
@@ -31,17 +30,15 @@ type Loan @key(fields: "id") {
   term: Int!
   status: LoanStatus!
   purpose: String!
-  
   """
   Prestamista - Referencia a User del otro subgrafo
+  Nullable porque préstamos PENDING no tienen lender asignado
   """
-  lender: User!
-  
+  lender: User
   """
   Prestatario - Referencia a User del otro subgrafo
   """
   borrower: User!
-  
   createdAt: String!
   fundedAt: String
   monthlyPayment: Float!

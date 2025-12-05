@@ -1,6 +1,3 @@
-# NOTA: Este archivo se generaría automáticamente con Rover CLI
-# Para este ejercicio didáctico, mostramos la estructura esperada
-
 schema
   @link(url: "https://specs.apollo.dev/link/v1.0")
   @link(url: "https://specs.apollo.dev/join/v0.3", for: EXECUTION)
@@ -26,25 +23,40 @@ directive @link(url: String, as: String, for: link__Purpose, import: [link__Impo
 scalar join__FieldSet
 
 enum join__Graph {
-  USERS @join__graph(name: "users", url: "http://localhost:8081/graphql")
-  LOANS @join__graph(name: "loans", url: "http://localhost:8082/graphql")
+  USERS @join__graph(name: "users", url: "http://users-service:8081/graphql")
+  LOANS @join__graph(name: "loans", url: "http://loans-service:8082/graphql")
 }
 
 scalar link__Import
 
 enum link__Purpose {
-  """
-  `SECURITY` features provide metadata necessary to securely resolve fields.
-  """
   SECURITY
-
-  """
-  `EXECUTION` features provide metadata necessary for operation execution.
-  """
   EXECUTION
 }
 
-# Types from Users subgraph
+type Query
+  @join__type(graph: USERS)
+  @join__type(graph: LOANS)
+{
+  user(id: ID!): User @join__field(graph: USERS)
+  users: [User!]! @join__field(graph: USERS)
+  verifiedLenders: [User!]! @join__field(graph: USERS)
+  verifiedBorrowers: [User!]! @join__field(graph: USERS)
+  loan(id: ID!): Loan @join__field(graph: LOANS)
+  loans: [Loan!]! @join__field(graph: LOANS)
+  loansByStatus(status: LoanStatus!): [Loan!]! @join__field(graph: LOANS)
+  availableLoans: [Loan!]! @join__field(graph: LOANS)
+}
+
+type Mutation
+  @join__type(graph: USERS)
+  @join__type(graph: LOANS)
+{
+  createUser(input: CreateUserInput!): UserResponse! @join__field(graph: USERS)
+  createLoanRequest(input: CreateLoanInput!): LoanResponse! @join__field(graph: LOANS)
+  fundLoan(loanId: ID!, lenderId: ID!): LoanResponse! @join__field(graph: LOANS)
+}
+
 type User
   @join__type(graph: USERS, key: "id")
   @join__type(graph: LOANS, key: "id", extension: true)
@@ -61,5 +73,108 @@ type User
   loansAsBorrower: [Loan!]! @join__field(graph: LOANS)
 }
 
-# Additional types and enums would be listed here...
-# This is a simplified version for demonstration
+type LenderProfile
+  @join__type(graph: USERS)
+{
+  totalLent: Float!
+  activeLoans: Int!
+  averageReturn: Float!
+  riskTolerance: RiskTolerance!
+  verified: Boolean!
+}
+
+type BorrowerProfile
+  @join__type(graph: USERS)
+{
+  creditScore: Int!
+  totalBorrowed: Float!
+  activeLoans: Int!
+  defaultRate: Float!
+  verified: Boolean!
+  kycStatus: KYCStatus!
+}
+
+type Loan
+  @join__type(graph: LOANS, key: "id")
+{
+  id: ID!
+  amount: Float!
+  interestRate: Float!
+  term: Int!
+  status: LoanStatus!
+  purpose: String!
+  lender: User!
+  borrower: User!
+  createdAt: String!
+  fundedAt: String
+  monthlyPayment: Float!
+  totalRepayment: Float!
+}
+
+enum UserType
+  @join__type(graph: USERS)
+{
+  LENDER @join__enumValue(graph: USERS)
+  BORROWER @join__enumValue(graph: USERS)
+  BOTH @join__enumValue(graph: USERS)
+}
+
+enum RiskTolerance
+  @join__type(graph: USERS)
+{
+  CONSERVATIVE @join__enumValue(graph: USERS)
+  MODERATE @join__enumValue(graph: USERS)
+  AGGRESSIVE @join__enumValue(graph: USERS)
+}
+
+enum KYCStatus
+  @join__type(graph: USERS)
+{
+  PENDING @join__enumValue(graph: USERS)
+  VERIFIED @join__enumValue(graph: USERS)
+  REJECTED @join__enumValue(graph: USERS)
+}
+
+enum LoanStatus
+  @join__type(graph: LOANS)
+{
+  PENDING @join__enumValue(graph: LOANS)
+  FUNDED @join__enumValue(graph: LOANS)
+  ACTIVE @join__enumValue(graph: LOANS)
+  COMPLETED @join__enumValue(graph: LOANS)
+  DEFAULTED @join__enumValue(graph: LOANS)
+}
+
+input CreateUserInput
+  @join__type(graph: USERS)
+{
+  email: String!
+  fullName: String!
+  userType: UserType!
+}
+
+input CreateLoanInput
+  @join__type(graph: LOANS)
+{
+  borrowerId: ID!
+  amount: Float!
+  interestRate: Float!
+  term: Int!
+  purpose: String!
+}
+
+type UserResponse
+  @join__type(graph: USERS)
+{
+  success: Boolean!
+  message: String!
+  user: User
+}
+
+type LoanResponse
+  @join__type(graph: LOANS)
+{
+  success: Boolean!
+  message: String!
+  loan: Loan
+}

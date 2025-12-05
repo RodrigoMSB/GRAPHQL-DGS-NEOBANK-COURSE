@@ -1,0 +1,20 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: fraud-detection-service
+
+dgs:
+  graphql:
+    graphiql:
+      enabled: true
+      path: /graphiql
+    websocket:
+      enabled: true
+      path: /subscriptions
+
+logging:
+  level:
+    com.neobank.fraud: DEBUG
+    com.netflix.graphql.dgs: DEBUG

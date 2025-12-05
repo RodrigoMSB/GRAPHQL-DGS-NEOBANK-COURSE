@@ -1,0 +1,19 @@
+# ============================================================================
+# APOLLO ROUTER CONFIGURATION - v1.37.0 Compatible
+# ============================================================================
+
+# Listen on all interfaces (not just 127.0.0.1)
+supergraph:
+  listen: 0.0.0.0:4000
+  introspection: true
+
+# CORS configuration
+cors:
+  allow_any_origin: true
+  allow_headers:
+    - "*"
+
+# Health check
+health_check:
+  listen: 0.0.0.0:8088
+  enabled: true

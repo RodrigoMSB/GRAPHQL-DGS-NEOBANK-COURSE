@@ -7,6 +7,7 @@ import com.netflix.graphql.dgs.DgsData;
 import com.netflix.graphql.dgs.DgsQuery;
 import com.netflix.graphql.dgs.DgsMutation;
 import com.netflix.graphql.dgs.InputArgument;
+import graphql.schema.DataFetchingEnvironment;
 import lombok.RequiredArgsConstructor;
 
 import java.util.HashMap;
@@ -39,44 +40,36 @@ public class LoansResolver {
         return loansService.getAvailableLoans();
     }
     
-    /**
-     * Resolver para User.loansAsLender
-     * Parte de la extensión del tipo User desde el subgrafo Loans
-     */
     @DgsData(parentType = "User", field = "loansAsLender")
-    public List<Loan> loansAsLender(Map<String, Object> user) {
+    public List<Loan> loansAsLender(DataFetchingEnvironment dfe) {
+        Map<String, Object> user = dfe.getSource();
         String userId = (String) user.get("id");
+        if (userId == null) return List.of();
         return loansService.getLoansByLender(userId);
     }
     
-    /**
-     * Resolver para User.loansAsBorrower
-     * Parte de la extensión del tipo User desde el subgrafo Loans
-     */
     @DgsData(parentType = "User", field = "loansAsBorrower")
-    public List<Loan> loansAsBorrower(Map<String, Object> user) {
+    public List<Loan> loansAsBorrower(DataFetchingEnvironment dfe) {
+        Map<String, Object> user = dfe.getSource();
         String userId = (String) user.get("id");
+        if (userId == null) return List.of();
         return loansService.getLoansByBorrower(userId);
     }
     
-    /**
-     * Resolver para Loan.lender
-     * Retorna una referencia stub que será resuelta por el subgrafo Users
-     */
     @DgsData(parentType = "Loan", field = "lender")
-    public Map<String, Object> lender(Loan loan) {
+    public Map<String, Object> lender(DataFetchingEnvironment dfe) {
+        Loan loan = dfe.getSource();
+        if (loan == null || loan.getLenderId() == null) return null;
         Map<String, Object> userRef = new HashMap<>();
         userRef.put("__typename", "User");
         userRef.put("id", loan.getLenderId());
         return userRef;
     }
     
-    /**
-     * Resolver para Loan.borrower
-     * Retorna una referencia stub que será resuelta por el subgrafo Users
-     */
     @DgsData(parentType = "Loan", field = "borrower")
-    public Map<String, Object> borrower(Loan loan) {
+    public Map<String, Object> borrower(DataFetchingEnvironment dfe) {
+        Loan loan = dfe.getSource();
+        if (loan == null || loan.getBorrowerId() == null) return null;
         Map<String, Object> userRef = new HashMap<>();
         userRef.put("__typename", "User");
         userRef.put("id", loan.getBorrowerId());
