@@ -1,0 +1,28 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: carbon-footprint-service
+    version: 2.0.0
+
+dgs:
+  graphql:
+    graphiql:
+      enabled: true
+      path: /graphiql
+    schema-locations:
+      - classpath*:schema/**/*.graphqls
+
+# Schema Governance Configuration
+schema:
+  governance:
+    version: 2.0.0
+    deprecation-notice-days: 90
+    breaking-change-validation: true
+    changelog-enabled: true
+
+logging:
+  level:
+    com.neobank.carbon: DEBUG
+    com.netflix.graphql.dgs: INFO

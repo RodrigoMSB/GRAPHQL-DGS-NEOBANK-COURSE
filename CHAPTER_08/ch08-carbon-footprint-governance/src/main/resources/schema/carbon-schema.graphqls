@@ -1,0 +1,293 @@
+# Schema Version: 2.0.0
+# Last Updated: 2024-12-05
+# Breaking Changes: See CHANGELOG.md
+# Carbon Footprint Tracking for ESG Compliance
+
+"""
+Transaction - Transacción bancaria con huella de carbono
+"""
+type Transaction {
+  id: ID!
+  accountId: String!
+  amount: Float!
+  currency: String!
+  merchantName: String!
+  merchantCategory: MerchantCategory!
+  date: String!
+  
+  """
+  Carbon footprint calculado para esta transacción
+  """
+  carbonFootprint: CarbonFootprint!
+  
+  """
+  ESG score del merchant (0-100)
+  """
+  esgScore: ESGScore
+  
+  """
+  @deprecated Use merchantCategory instead
+  Legacy field mantained for backward compatibility
+  Will be removed in v3.0.0 (Q2 2025)
+  """
+  category: String @deprecated(reason: "Use merchantCategory enum for type safety. Removal planned: v3.0.0")
+  
+  """
+  @deprecated Use carbonFootprint.offsetPurchased instead
+  Will be removed in v3.0.0
+  """
+  hasOffset: Boolean @deprecated(reason: "Moved to CarbonFootprint type. Use carbonFootprint.offsetPurchased")
+}
+
+"""
+CarbonFootprint - Huella de carbono de una transacción
+"""
+type CarbonFootprint {
+  """
+  CO2 emitido en kilogramos
+  """
+  co2Kg: Float!
+  
+  """
+  Equivalente en árboles necesarios para compensar
+  """
+  treesEquivalent: Float!
+  
+  """
+  Categoría de impacto ambiental
+  """
+  impactLevel: ImpactLevel!
+  
+  """
+  Método de cálculo utilizado
+  """
+  calculationMethod: String!
+  
+  """
+  Si el usuario compró offset de carbono
+  """
+  offsetPurchased: Boolean!
+  
+  """
+  Costo del offset en USD (si fue comprado)
+  """
+  offsetCost: Float
+  
+  """
+  Detalles del cálculo
+  """
+  breakdown: CarbonBreakdown
+}
+
+"""
+CarbonBreakdown - Desglose detallado del cálculo
+ADDED IN v2.0.0
+"""
+type CarbonBreakdown {
+  transportationCO2: Float!
+  productionCO2: Float!
+  packagingCO2: Float!
+  notes: String
+}
+
+"""
+ESGScore - Environmental, Social, Governance score del merchant
+"""
+type ESGScore {
+  overall: Int!
+  environmental: Int!
+  social: Int!
+  governance: Int!
+  lastUpdated: String!
+  certifications: [String!]!
+}
+
+"""
+MerchantCategory - Categorías de comercios
+ADDED IN v2.0.0 - Replacing String category
+"""
+enum MerchantCategory {
+  FOOD_RETAIL
+  FASHION_RETAIL
+  ELECTRONICS
+  TRANSPORTATION
+  ENERGY
+  TRAVEL_AVIATION
+  TRAVEL_HOSPITALITY
+  SERVICES
+  OTHER
+}
+
+"""
+ImpactLevel - Nivel de impacto ambiental
+"""
+enum ImpactLevel {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+"""
+SustainabilityReport - Reporte de sostenibilidad
+"""
+type SustainabilityReport {
+  accountId: String!
+  period: String!
+  totalCO2Kg: Float!
+  totalTransactions: Int!
+  averageCO2PerTransaction: Float!
+  highestImpactTransaction: Transaction
+  offsetPercentage: Float!
+  esgAverageScore: Float!
+  recommendations: [String!]!
+  comparison: PeriodComparison
+}
+
+"""
+PeriodComparison - Comparación con período anterior
+ADDED IN v2.0.0
+"""
+type PeriodComparison {
+  previousPeriod: String!
+  co2Change: Float!
+  percentageChange: Float!
+  trend: Trend!
+}
+
+enum Trend {
+  IMPROVING
+  STABLE
+  WORSENING
+}
+
+"""
+CarbonAlert - Alerta de alto impacto de carbono
+"""
+type CarbonAlert {
+  id: ID!
+  transactionId: String!
+  severity: AlertSeverity!
+  message: String!
+  recommendation: String!
+  createdAt: String!
+}
+
+enum AlertSeverity {
+  INFO
+  WARNING
+  CRITICAL
+}
+
+type Query {
+  """
+  Obtener transacción por ID con footprint
+  """
+  transaction(id: ID!): Transaction
+  
+  """
+  Obtener todas las transacciones de una cuenta
+  """
+  transactions(accountId: String!): [Transaction!]!
+  
+  """
+  Obtener transacciones por nivel de impacto
+  """
+  transactionsByImpact(accountId: String!, impactLevel: ImpactLevel!): [Transaction!]!
+  
+  """
+  Reporte de sostenibilidad mensual
+  """
+  sustainabilityReport(accountId: String!, year: Int!, month: Int!): SustainabilityReport!
+  
+  """
+  Comparar sostenibilidad entre períodos
+  """
+  comparePeriods(
+    accountId: String!
+    year1: Int!
+    month1: Int!
+    year2: Int!
+    month2: Int!
+  ): PeriodComparison!
+  
+  """
+  Alertas de carbono activas
+  """
+  carbonAlerts(accountId: String!): [CarbonAlert!]!
+  
+  """
+  ESG score de un merchant
+  """
+  merchantESG(merchantName: String!): ESGScore
+  
+  """
+  Schema version info
+  """
+  schemaVersion: SchemaVersionInfo!
+}
+
+type Mutation {
+  """
+  Crear transacción con cálculo automático de footprint
+  """
+  createTransaction(input: TransactionInput!): TransactionResponse!
+  
+  """
+  Comprar carbon offset para una transacción
+  """
+  purchaseCarbonOffset(transactionId: ID!): CarbonOffsetResponse!
+  
+  """
+  @deprecated Use purchaseCarbonOffset instead
+  Legacy endpoint mantained for v1 clients
+  Will be removed in v3.0.0
+  """
+  buyOffset(transactionId: ID!) : Boolean @deprecated(reason: "Use purchaseCarbonOffset for detailed response. Removal: v3.0.0")
+}
+
+input TransactionInput {
+  accountId: String!
+  amount: Float!
+  currency: String!
+  merchantName: String!
+  merchantCategory: MerchantCategory!
+  date: String!
+}
+
+type TransactionResponse {
+  success: Boolean!
+  message: String!
+  transaction: Transaction
+  carbonAlert: CarbonAlert
+}
+
+type CarbonOffsetResponse {
+  success: Boolean!
+  message: String!
+  offsetCost: Float!
+  co2Offset: Float!
+  certificateId: String
+}
+
+"""
+SchemaVersionInfo - Información de versión del schema
+ADDED IN v2.0.0 for governance
+"""
+type SchemaVersionInfo {
+  version: String!
+  lastUpdated: String!
+  deprecations: [DeprecationInfo!]!
+  breakingChanges: [String!]!
+  changelog: String!
+}
+
+"""
+DeprecationInfo - Información de campos deprecados
+"""
+type DeprecationInfo {
+  field: String!
+  reason: String!
+  removedInVersion: String!
+  alternative: String!
+}
