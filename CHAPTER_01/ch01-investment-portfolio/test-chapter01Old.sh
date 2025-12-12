@@ -152,11 +152,20 @@ ${CYAN}   }${NC}"
     # Formatear JSON si jq está disponible
     if command -v jq >/dev/null 2>&1; then
         formatted=$(echo "$response" | jq -C '.' 2>/dev/null || echo "$response")
-        log "   ${GREEN}📥 RESPONSE:${NC}"
-        log "$formatted"
+        if [ ${#formatted} -gt 400 ]; then
+            log "   ${GREEN}📥 RESPONSE:${NC}"
+            log "$formatted" | head -20
+            log "   ${YELLOW}... (respuesta truncada, ver archivo de log completo)${NC}"
+        else
+            log "   ${GREEN}📥 RESPONSE:${NC}"
+            log "$formatted"
+        fi
     else
-        log "   ${GREEN}📥 RESPONSE:${NC}"
-        log "$response"
+        if [ ${#response} -gt 200 ]; then
+            log "   ${GREEN}📥 RESPONSE:${NC} ${response:0:200}..."
+        else
+            log "   ${GREEN}📥 RESPONSE:${NC} $response"
+        fi
     fi
     
     if [ $exit_code -eq 0 ] && echo "$response" | grep -qE "$validation"; then
@@ -208,11 +217,20 @@ ${CYAN}   }${NC}"
     # Formatear JSON si jq está disponible
     if command -v jq >/dev/null 2>&1; then
         formatted=$(echo "$response" | jq -C '.' 2>/dev/null || echo "$response")
-        log "   ${GREEN}📥 RESPONSE:${NC}"
-        log "$formatted"
+        if [ ${#formatted} -gt 400 ]; then
+            log "   ${GREEN}📥 RESPONSE:${NC}"
+            log "$formatted" | head -20
+            log "   ${YELLOW}... (respuesta truncada, ver archivo de log completo)${NC}"
+        else
+            log "   ${GREEN}📥 RESPONSE:${NC}"
+            log "$formatted"
+        fi
     else
-        log "   ${GREEN}📥 RESPONSE:${NC}"
-        log "$response"
+        if [ ${#response} -gt 200 ]; then
+            log "   ${GREEN}📥 RESPONSE:${NC} ${response:0:200}..."
+        else
+            log "   ${GREEN}📥 RESPONSE:${NC} $response"
+        fi
     fi
     
     log ""

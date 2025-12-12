@@ -2,46 +2,89 @@ spring:
   application:
     name: investment-portfolio-graphql
   
+  # ============================================================================
   # GraphQL Configuration
+  # ============================================================================
   graphql:
-    # GraphiQL UI habilitado para testing
+    # GraphiQL UI - Interfaz web para testing GraphQL
     graphiql:
       enabled: true
       path: /graphiql
     
-    # Path del endpoint GraphQL
+    # Endpoint principal de GraphQL
     path: /graphql
     
-    # Schema location e introspection
+    # Configuración del Schema
     schema:
+      # Ubicación de los archivos .graphqls
       locations: classpath:graphql/
+      
+      # Extensiones de archivo reconocidas
       file-extensions: .graphqls
+      
+      # Introspection - permite consultar el schema
       introspection:
         enabled: true
+    
+    # Configuración de CORS (para desarrollo)
+    cors:
+      allowed-origins: "*"
+      allowed-methods: "*"
+      allowed-headers: "*"
 
+# ============================================================================
 # Server Configuration
+# ============================================================================
 server:
   port: 8080
   
   servlet:
     context-path: /
+  
+  # Compresión de respuestas
+  compression:
+    enabled: true
+    mime-types: application/json,application/graphql+json
 
-# Logging
+# ============================================================================
+# Logging Configuration
+# ============================================================================
 logging:
   level:
     root: INFO
     com.neobank.portfolio: DEBUG
     org.springframework.graphql: DEBUG
     org.springframework.web: INFO
+    org.springframework.security: DEBUG
+  
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} - %logger{36} - %msg%n"
 
-# Security (JWT)
+# ============================================================================
+# Security Configuration (JWT)
+# ============================================================================
 jwt:
-  secret: "neobank-graphql-course-secret-key-change-in-production"
+  secret: "neobank-graphql-course-secret-key-change-in-production-minimum-256-bits"
   expiration: 86400000 # 24 horas en milisegundos
 
+# ============================================================================
 # Application Info
+# ============================================================================
 info:
   app:
     name: Investment Portfolio GraphQL
     description: Chapter 1 - GraphQL Fundamentals
     version: 1.0.0
+    java-version: 21
+
+# ============================================================================
+# Management Endpoints (opcional - para monitoreo)
+# ============================================================================
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+  endpoint:
+    health:
+      show-details: always
