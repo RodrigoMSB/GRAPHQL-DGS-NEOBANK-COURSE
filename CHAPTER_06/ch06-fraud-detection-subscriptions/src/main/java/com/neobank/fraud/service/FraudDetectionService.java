@@ -3,8 +3,8 @@ package com.neobank.fraud.service;
 import com.neobank.fraud.model.FraudAlert;
 import com.neobank.fraud.model.RiskLevel;
 import com.neobank.fraud.model.Transaction;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
@@ -15,10 +15,10 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
-@Slf4j
 @Service
-@RequiredArgsConstructor
 public class FraudDetectionService {
+    
+    private static final Logger log = LoggerFactory.getLogger(FraudDetectionService.class);
     
     private final TransactionService transactionService;
     private final Map<String, List<FraudAlert>> alertsByAccount = new ConcurrentHashMap<>();
@@ -32,6 +32,10 @@ public class FraudDetectionService {
     private static final List<String> SUSPICIOUS_LOCATIONS = List.of(
         "Nigeria", "Russia", "China", "North Korea"
     );
+    
+    public FraudDetectionService(TransactionService transactionService) {
+        this.transactionService = transactionService;
+    }
     
     /**
      * Analiza una transacción y detecta posibles fraudes

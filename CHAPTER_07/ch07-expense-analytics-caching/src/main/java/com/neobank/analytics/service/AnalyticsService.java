@@ -1,8 +1,8 @@
 package com.neobank.analytics.service;
 
 import com.neobank.analytics.model.*;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
@@ -10,12 +10,16 @@ import org.springframework.stereotype.Service;
 import java.util.*;
 import java.util.stream.Collectors;
 
-@Slf4j
 @Service
-@RequiredArgsConstructor
 public class AnalyticsService {
     
+    private static final Logger log = LoggerFactory.getLogger(AnalyticsService.class);
+    
     private final ExpenseService expenseService;
+    
+    public AnalyticsService(ExpenseService expenseService) {
+        this.expenseService = expenseService;
+    }
     
     /**
      * RESOLVER-LEVEL CACHING

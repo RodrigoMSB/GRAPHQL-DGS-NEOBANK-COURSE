@@ -1,11 +1,7 @@
 package com.neobank.cashback.model;
 
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Data;
-import lombok.NoArgsConstructor;
-
 import java.time.LocalDateTime;
+import java.util.Objects;
 
 /**
  * Usuario del programa de cashback.
@@ -19,10 +15,6 @@ import java.time.LocalDateTime;
  * - Este es un OUTPUT type (lo que el servidor retorna)
  * - NO se usa directamente para crear usuarios (usaríamos un CreateUserInput)
  */
-@Data
-@Builder
-@NoArgsConstructor
-@AllArgsConstructor
 public class User {
     /**
      * ID único del usuario.
@@ -100,4 +92,141 @@ public class User {
      * Suma de amounts de todas las transactions CONFIRMED.
      */
     // NO hay campo aquí - se calcula en resolver
+    
+    // =========================================================================
+    // CONSTRUCTORS
+    // =========================================================================
+    
+    public User() {
+    }
+    
+    public User(String id, String email, String fullName, CashbackTier tier,
+                LocalDateTime enrolledAt) {
+        this.id = id;
+        this.email = email;
+        this.fullName = fullName;
+        this.tier = tier;
+        this.enrolledAt = enrolledAt;
+    }
+    
+    // =========================================================================
+    // GETTERS
+    // =========================================================================
+    
+    public String getId() {
+        return id;
+    }
+    
+    public String getEmail() {
+        return email;
+    }
+    
+    public String getFullName() {
+        return fullName;
+    }
+    
+    public CashbackTier getTier() {
+        return tier;
+    }
+    
+    public LocalDateTime getEnrolledAt() {
+        return enrolledAt;
+    }
+    
+    // =========================================================================
+    // SETTERS
+    // =========================================================================
+    
+    public void setId(String id) {
+        this.id = id;
+    }
+    
+    public void setEmail(String email) {
+        this.email = email;
+    }
+    
+    public void setFullName(String fullName) {
+        this.fullName = fullName;
+    }
+    
+    public void setTier(CashbackTier tier) {
+        this.tier = tier;
+    }
+    
+    public void setEnrolledAt(LocalDateTime enrolledAt) {
+        this.enrolledAt = enrolledAt;
+    }
+    
+    // =========================================================================
+    // EQUALS, HASHCODE, TOSTRING
+    // =========================================================================
+    
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        User user = (User) o;
+        return Objects.equals(id, user.id);
+    }
+    
+    @Override
+    public int hashCode() {
+        return Objects.hash(id);
+    }
+    
+    @Override
+    public String toString() {
+        return "User{" +
+                "id='" + id + '\'' +
+                ", email='" + email + '\'' +
+                ", fullName='" + fullName + '\'' +
+                ", tier=" + tier +
+                ", enrolledAt=" + enrolledAt +
+                '}';
+    }
+    
+    // =========================================================================
+    // BUILDER
+    // =========================================================================
+    
+    public static Builder builder() {
+        return new Builder();
+    }
+    
+    public static class Builder {
+        private String id;
+        private String email;
+        private String fullName;
+        private CashbackTier tier;
+        private LocalDateTime enrolledAt;
+        
+        public Builder id(String id) {
+            this.id = id;
+            return this;
+        }
+        
+        public Builder email(String email) {
+            this.email = email;
+            return this;
+        }
+        
+        public Builder fullName(String fullName) {
+            this.fullName = fullName;
+            return this;
+        }
+        
+        public Builder tier(CashbackTier tier) {
+            this.tier = tier;
+            return this;
+        }
+        
+        public Builder enrolledAt(LocalDateTime enrolledAt) {
+            this.enrolledAt = enrolledAt;
+            return this;
+        }
+        
+        public User build() {
+            return new User(id, email, fullName, tier, enrolledAt);
+        }
+    }
 }

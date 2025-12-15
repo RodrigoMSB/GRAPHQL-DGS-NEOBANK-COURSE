@@ -4,7 +4,6 @@ import com.neobank.portfolio.data.MockDataService;
 import com.neobank.portfolio.model.Asset;
 import com.neobank.portfolio.model.Performance;
 import com.neobank.portfolio.model.Portfolio;
-import lombok.RequiredArgsConstructor;
 import org.springframework.graphql.data.method.annotation.Argument;
 import org.springframework.graphql.data.method.annotation.QueryMapping;
 import org.springframework.stereotype.Controller;
@@ -74,10 +73,13 @@ import java.util.List;
  * @see schema.graphqls
  */
 @Controller
-@RequiredArgsConstructor
 public class PortfolioQueryResolver {
     
     private final MockDataService dataService;
+    
+    public PortfolioQueryResolver(MockDataService dataService) {
+        this.dataService = dataService;
+    }
     
     /**
      * Query: myPortfolios

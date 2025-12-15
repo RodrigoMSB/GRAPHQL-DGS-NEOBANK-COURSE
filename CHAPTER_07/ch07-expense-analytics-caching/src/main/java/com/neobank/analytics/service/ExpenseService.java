@@ -2,7 +2,8 @@ package com.neobank.analytics.service;
 
 import com.neobank.analytics.model.Category;
 import com.neobank.analytics.model.Expense;
-import lombok.extern.slf4j.Slf4j;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
@@ -10,9 +11,10 @@ import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
-@Slf4j
 @Service
 public class ExpenseService {
+    
+    private static final Logger log = LoggerFactory.getLogger(ExpenseService.class);
     
     private final Map<String, Expense> expenses = new ConcurrentHashMap<>();
     private final Map<String, List<Expense>> expensesByAccount = new ConcurrentHashMap<>();

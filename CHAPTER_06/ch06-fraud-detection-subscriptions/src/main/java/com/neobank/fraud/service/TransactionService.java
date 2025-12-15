@@ -1,7 +1,8 @@
 package com.neobank.fraud.service;
 
 import com.neobank.fraud.model.Transaction;
-import lombok.extern.slf4j.Slf4j;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
@@ -9,9 +10,10 @@ import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
-@Slf4j
 @Service
 public class TransactionService {
+    
+    private static final Logger log = LoggerFactory.getLogger(TransactionService.class);
     
     private final Map<String, Transaction> transactions = new ConcurrentHashMap<>();
     private final Map<String, List<Transaction>> transactionsByAccount = new ConcurrentHashMap<>();

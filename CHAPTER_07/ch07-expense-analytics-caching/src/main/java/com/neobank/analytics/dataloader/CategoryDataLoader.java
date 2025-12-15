@@ -4,16 +4,15 @@ import com.neobank.analytics.model.Category;
 import com.neobank.analytics.model.Expense;
 import com.neobank.analytics.service.ExpenseService;
 import com.netflix.graphql.dgs.DgsDataLoader;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.dataloader.BatchLoader;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
-import java.util.stream.Collectors;
 
 /**
  * PER-REQUEST CACHING con DataLoader
@@ -34,23 +33,56 @@ import java.util.stream.Collectors;
  * 
  * DataLoader batchea requests 1 y 2 en una sola llamada, y request 3 usa cache.
  */
-@Slf4j
 @DgsDataLoader(name = "categoryExpenses")
-@RequiredArgsConstructor
 public class CategoryDataLoader implements BatchLoader<CategoryDataLoader.CategoryKey, List<Expense>> {
     
+    private static final Logger log = LoggerFactory.getLogger(CategoryDataLoader.class);
+    
     private final ExpenseService expenseService;
+    
+    public CategoryDataLoader(ExpenseService expenseService) {
+        this.expenseService = expenseService;
+    }
     
     /**
      * Key compuesta para DataLoader
      * Necesitamos accountId + category para identificar uniquely cada request
      */
-    @lombok.Data
-    @lombok.AllArgsConstructor
-    @lombok.NoArgsConstructor
     public static class CategoryKey {
         private String accountId;
         private Category category;
+        
+        public CategoryKey() {
+        }
+        
+        public CategoryKey(String accountId, Category category) {
+            this.accountId = accountId;
+            this.category = category;
+        }
+        
+        public String getAccountId() { return accountId; }
+        public void setAccountId(String accountId) { this.accountId = accountId; }
+        
+        public Category getCategory() { return category; }
+        public void setCategory(Category category) { this.category = category; }
+        
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (o == null || getClass() != o.getClass()) return false;
+            CategoryKey that = (CategoryKey) o;
+            return Objects.equals(accountId, that.accountId) && category == that.category;
+        }
+        
+        @Override
+        public int hashCode() {
+            return Objects.hash(accountId, category);
+        }
+        
+        @Override
+        public String toString() {
+            return "CategoryKey{accountId='" + accountId + "', category=" + category + "}";
+        }
     }
     
     @Override

@@ -1,32 +1,21 @@
 package com.neobank.carbon.service;
 
 import com.neobank.carbon.model.*;
-import lombok.extern.slf4j.Slf4j;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
-@Slf4j
 @Service
 public class CarbonCalculatorService {
     
-    /**
-     * Calcula la huella de carbono basado en monto, categoría y merchant
-     */
+    private static final Logger log = LoggerFactory.getLogger(CarbonCalculatorService.class);
+    
     public CarbonFootprint calculateFootprint(Double amount, MerchantCategory category, 
                                               String merchantName) {
-        
-        // Factor base por categoría (kg CO2 por $100 USD)
         double baseFactor = getBaseFactor(category);
-        
-        // Calcular CO2 base
         double co2Kg = (amount / 100.0) * baseFactor;
-        
-        // Breakdown detallado
         CarbonBreakdown breakdown = calculateBreakdown(co2Kg, category);
-        
-        // Determinar nivel de impacto
         ImpactLevel impactLevel = determineImpactLevel(co2Kg);
-        
-        // Equivalente en árboles (1 árbol absorbe ~20kg CO2/año)
         double treesEquivalent = co2Kg / 20.0;
         
         log.debug("Carbon calculated: {} - {} kg CO2 ({})", 
@@ -44,7 +33,7 @@ public class CarbonCalculatorService {
     
     private double getBaseFactor(MerchantCategory category) {
         return switch (category) {
-            case TRAVEL_AVIATION -> 120.0;      // Alto impacto
+            case TRAVEL_AVIATION -> 120.0;
             case ENERGY -> 45.0;
             case TRANSPORTATION -> 35.0;
             case FASHION_RETAIL -> 25.0;
@@ -57,7 +46,6 @@ public class CarbonCalculatorService {
     }
     
     private CarbonBreakdown calculateBreakdown(double totalCO2, MerchantCategory category) {
-        // Distribución aproximada según categoría
         double transportation = switch (category) {
             case TRAVEL_AVIATION, TRANSPORTATION -> totalCO2 * 0.7;
             case FASHION_RETAIL, ELECTRONICS -> totalCO2 * 0.4;

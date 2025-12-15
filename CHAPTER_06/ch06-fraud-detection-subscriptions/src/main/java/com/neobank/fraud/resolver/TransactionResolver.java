@@ -9,21 +9,29 @@ import com.netflix.graphql.dgs.DgsComponent;
 import com.netflix.graphql.dgs.DgsMutation;
 import com.netflix.graphql.dgs.DgsQuery;
 import com.netflix.graphql.dgs.InputArgument;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-@Slf4j
 @DgsComponent
-@RequiredArgsConstructor
 public class TransactionResolver {
+    
+    private static final Logger log = LoggerFactory.getLogger(TransactionResolver.class);
     
     private final TransactionService transactionService;
     private final FraudDetectionService fraudDetectionService;
     private final FraudAlertPublisher fraudAlertPublisher;
+    
+    public TransactionResolver(TransactionService transactionService,
+                               FraudDetectionService fraudDetectionService,
+                               FraudAlertPublisher fraudAlertPublisher) {
+        this.transactionService = transactionService;
+        this.fraudDetectionService = fraudDetectionService;
+        this.fraudAlertPublisher = fraudAlertPublisher;
+    }
     
     @DgsQuery
     public Transaction transaction(@InputArgument String id) {

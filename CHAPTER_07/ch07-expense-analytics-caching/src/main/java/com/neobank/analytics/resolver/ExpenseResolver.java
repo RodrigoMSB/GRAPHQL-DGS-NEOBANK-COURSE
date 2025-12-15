@@ -5,9 +5,9 @@ import com.neobank.analytics.model.*;
 import com.neobank.analytics.service.AnalyticsService;
 import com.neobank.analytics.service.ExpenseService;
 import com.netflix.graphql.dgs.*;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.dataloader.DataLoader;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.time.LocalDate;
 import java.util.HashMap;
@@ -15,13 +15,18 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
-@Slf4j
 @DgsComponent
-@RequiredArgsConstructor
 public class ExpenseResolver {
+    
+    private static final Logger log = LoggerFactory.getLogger(ExpenseResolver.class);
     
     private final ExpenseService expenseService;
     private final AnalyticsService analyticsService;
+    
+    public ExpenseResolver(ExpenseService expenseService, AnalyticsService analyticsService) {
+        this.expenseService = expenseService;
+        this.analyticsService = analyticsService;
+    }
     
     @DgsQuery
     public Expense expense(@InputArgument String id) {

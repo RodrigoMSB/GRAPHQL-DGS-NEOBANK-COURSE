@@ -4,16 +4,17 @@ import com.neobank.carbon.governance.SchemaVersionService;
 import com.neobank.carbon.model.*;
 import com.neobank.carbon.service.*;
 import com.netflix.graphql.dgs.*;
-import lombok.extern.slf4j.Slf4j;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.*;
-import java.util.stream.Collectors;
 
-@Slf4j
 @DgsComponent
 public class CarbonResolver {
+    
+    private static final Logger log = LoggerFactory.getLogger(CarbonResolver.class);
     
     private final TransactionService transactionService;
     private final CarbonCalculatorService carbonCalculator;
@@ -46,7 +47,6 @@ public class CarbonResolver {
     public List<Transaction> transactionsByImpact(
             @InputArgument String accountId,
             @InputArgument ImpactLevel impactLevel) {
-        
         return transactionService.getTransactionsByImpact(accountId, impactLevel);
     }
     
@@ -245,15 +245,12 @@ public class CarbonResolver {
         if (totalCO2 > 100) {
             recommendations.add("Consider reducing air travel");
         }
-        
         if (offsetPercentage < 20) {
             recommendations.add("Purchase carbon offsets for high-impact transactions");
         }
-        
         if (avgESG < 60) {
             recommendations.add("Choose merchants with better ESG ratings");
         }
-        
         recommendations.add("Track your progress monthly");
         
         return recommendations;

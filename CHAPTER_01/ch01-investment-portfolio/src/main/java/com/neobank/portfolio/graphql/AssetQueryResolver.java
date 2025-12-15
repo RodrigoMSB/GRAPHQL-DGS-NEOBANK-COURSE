@@ -3,7 +3,6 @@ package com.neobank.portfolio.graphql;
 import com.neobank.portfolio.data.MockDataService;
 import com.neobank.portfolio.model.Asset;
 import com.neobank.portfolio.model.AssetType;
-import lombok.RequiredArgsConstructor;
 import org.springframework.graphql.data.method.annotation.Argument;
 import org.springframework.graphql.data.method.annotation.QueryMapping;
 import org.springframework.stereotype.Controller;
@@ -17,10 +16,13 @@ import java.util.stream.Collectors;
  * SECCIÓN 1.4 - FILTROS, ORDEN Y PAGINACIÓN
  */
 @Controller
-@RequiredArgsConstructor
 public class AssetQueryResolver {
     
     private final MockDataService dataService;
+    
+    public AssetQueryResolver(MockDataService dataService) {
+        this.dataService = dataService;
+    }
     
     @QueryMapping
     public AssetConnection assets(
@@ -181,7 +183,9 @@ public class AssetQueryResolver {
         return new String(Base64.getDecoder().decode(cursor));
     }
     
+    // =========================================================================
     // DTOs para la respuesta paginada
+    // =========================================================================
     
     public static class AssetConnection {
         private List<AssetEdge> edges;

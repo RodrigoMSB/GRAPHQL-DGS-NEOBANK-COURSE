@@ -4,7 +4,6 @@ import com.neobank.portfolio.data.MockDataService;
 import com.neobank.portfolio.model.Asset;
 import com.neobank.portfolio.model.AssetType;
 import com.neobank.portfolio.model.Portfolio;
-import lombok.RequiredArgsConstructor;
 import org.springframework.graphql.data.method.annotation.Argument;
 import org.springframework.graphql.data.method.annotation.MutationMapping;
 import org.springframework.stereotype.Controller;
@@ -44,10 +43,13 @@ import java.util.Map;
  * @see schema.graphqls (types CreatePortfolioInput, AddAssetInput, etc.)
  */
 @Controller
-@RequiredArgsConstructor
 public class PortfolioMutationResolver {
     
     private final MockDataService dataService;
+    
+    public PortfolioMutationResolver(MockDataService dataService) {
+        this.dataService = dataService;
+    }
     
     /**
      * Mutation: createPortfolio
@@ -249,34 +251,136 @@ public class PortfolioMutationResolver {
     /**
      * DTO para respuesta de createPortfolio mutation
      */
-    @lombok.Data
-    @lombok.Builder
     public static class CreatePortfolioResponse {
         private Boolean success;
         private String message;
         private Portfolio portfolio;
+        
+        public CreatePortfolioResponse() {
+        }
+        
+        public CreatePortfolioResponse(Boolean success, String message, Portfolio portfolio) {
+            this.success = success;
+            this.message = message;
+            this.portfolio = portfolio;
+        }
+        
+        // Getters
+        public Boolean getSuccess() { return success; }
+        public String getMessage() { return message; }
+        public Portfolio getPortfolio() { return portfolio; }
+        
+        // Setters
+        public void setSuccess(Boolean success) { this.success = success; }
+        public void setMessage(String message) { this.message = message; }
+        public void setPortfolio(Portfolio portfolio) { this.portfolio = portfolio; }
+        
+        // Builder
+        public static Builder builder() { return new Builder(); }
+        
+        public static class Builder {
+            private Boolean success;
+            private String message;
+            private Portfolio portfolio;
+            
+            public Builder success(Boolean success) { this.success = success; return this; }
+            public Builder message(String message) { this.message = message; return this; }
+            public Builder portfolio(Portfolio portfolio) { this.portfolio = portfolio; return this; }
+            
+            public CreatePortfolioResponse build() {
+                return new CreatePortfolioResponse(success, message, portfolio);
+            }
+        }
     }
     
     /**
      * DTO para respuesta de addAsset mutation
      */
-    @lombok.Data
-    @lombok.Builder
     public static class AddAssetResponse {
         private Boolean success;
         private String message;
         private Asset asset;
+        
+        public AddAssetResponse() {
+        }
+        
+        public AddAssetResponse(Boolean success, String message, Asset asset) {
+            this.success = success;
+            this.message = message;
+            this.asset = asset;
+        }
+        
+        // Getters
+        public Boolean getSuccess() { return success; }
+        public String getMessage() { return message; }
+        public Asset getAsset() { return asset; }
+        
+        // Setters
+        public void setSuccess(Boolean success) { this.success = success; }
+        public void setMessage(String message) { this.message = message; }
+        public void setAsset(Asset asset) { this.asset = asset; }
+        
+        // Builder
+        public static Builder builder() { return new Builder(); }
+        
+        public static class Builder {
+            private Boolean success;
+            private String message;
+            private Asset asset;
+            
+            public Builder success(Boolean success) { this.success = success; return this; }
+            public Builder message(String message) { this.message = message; return this; }
+            public Builder asset(Asset asset) { this.asset = asset; return this; }
+            
+            public AddAssetResponse build() {
+                return new AddAssetResponse(success, message, asset);
+            }
+        }
     }
     
     /**
      * DTO para respuesta genérica de mutations
      */
-    @lombok.Data
-    @lombok.Builder
     public static class MutationResponse {
         private Boolean success;
         private String message;
         private String code;
+        
+        public MutationResponse() {
+        }
+        
+        public MutationResponse(Boolean success, String message, String code) {
+            this.success = success;
+            this.message = message;
+            this.code = code;
+        }
+        
+        // Getters
+        public Boolean getSuccess() { return success; }
+        public String getMessage() { return message; }
+        public String getCode() { return code; }
+        
+        // Setters
+        public void setSuccess(Boolean success) { this.success = success; }
+        public void setMessage(String message) { this.message = message; }
+        public void setCode(String code) { this.code = code; }
+        
+        // Builder
+        public static Builder builder() { return new Builder(); }
+        
+        public static class Builder {
+            private Boolean success;
+            private String message;
+            private String code;
+            
+            public Builder success(Boolean success) { this.success = success; return this; }
+            public Builder message(String message) { this.message = message; return this; }
+            public Builder code(String code) { this.code = code; return this; }
+            
+            public MutationResponse build() {
+                return new MutationResponse(success, message, code);
+            }
+        }
     }
 }
 

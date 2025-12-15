@@ -1,8 +1,8 @@
 package com.neobank.carbon.service;
 
 import com.neobank.carbon.model.*;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
@@ -10,9 +10,10 @@ import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
-@Slf4j
 @Service
 public class TransactionService {
+    
+    private static final Logger log = LoggerFactory.getLogger(TransactionService.class);
     
     private final CarbonCalculatorService carbonCalculator;
     private final ESGService esgService;
@@ -32,12 +33,10 @@ public class TransactionService {
         
         String id = "txn-" + UUID.randomUUID().toString().substring(0, 8);
         
-        // Calcular carbon footprint
         CarbonFootprint footprint = carbonCalculator.calculateFootprint(
             amount, merchantCategory, merchantName
         );
         
-        // Obtener ESG score del merchant
         ESGScore esgScore = esgService.getESGScore(merchantName, merchantCategory);
         
         Transaction transaction = Transaction.builder()
@@ -50,7 +49,6 @@ public class TransactionService {
                 .date(date)
                 .carbonFootprint(footprint)
                 .esgScore(esgScore)
-                // Deprecated fields (for backward compatibility)
                 .category(merchantCategory.name())
                 .hasOffset(footprint.getOffsetPurchased())
                 .build();
@@ -89,9 +87,7 @@ public class TransactionService {
         if (transaction != null && !transaction.getCarbonFootprint().getOffsetPurchased()) {
             CarbonFootprint footprint = transaction.getCarbonFootprint();
             footprint.setOffsetPurchased(true);
-            footprint.setOffsetCost(footprint.getCo2Kg() * 15.0); // $15 per kg CO2
-            
-            // Update deprecated field
+            footprint.setOffsetCost(footprint.getCo2Kg() * 15.0);
             transaction.setHasOffset(true);
             
             log.info("Carbon offset purchased for transaction {}: ${}", 
@@ -102,7 +98,6 @@ public class TransactionService {
     }
     
     private void initializeSampleData() {
-        // Account 001 - Noviembre 2024
         createTransaction("account-001", 150.0, "USD", "Whole Foods", 
                 MerchantCategory.FOOD_RETAIL, LocalDate.of(2024, 11, 1));
         
@@ -118,7 +113,6 @@ public class TransactionService {
         createTransaction("account-001", 45.0, "USD", "Uber", 
                 MerchantCategory.TRANSPORTATION, LocalDate.of(2024, 11, 20));
         
-        // Account 001 - Diciembre 2024
         createTransaction("account-001", 200.0, "USD", "Whole Foods", 
                 MerchantCategory.FOOD_RETAIL, LocalDate.of(2024, 12, 1));
         

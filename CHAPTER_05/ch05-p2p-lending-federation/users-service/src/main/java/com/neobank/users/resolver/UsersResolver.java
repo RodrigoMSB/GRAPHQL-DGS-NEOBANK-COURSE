@@ -6,17 +6,19 @@ import com.netflix.graphql.dgs.DgsComponent;
 import com.netflix.graphql.dgs.DgsQuery;
 import com.netflix.graphql.dgs.DgsMutation;
 import com.netflix.graphql.dgs.InputArgument;
-import lombok.RequiredArgsConstructor;
 
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
 @DgsComponent
-@RequiredArgsConstructor
 public class UsersResolver {
     
     private final UsersService usersService;
+    
+    public UsersResolver(UsersService usersService) {
+        this.usersService = usersService;
+    }
     
     @DgsQuery
     public User user(@InputArgument String id) {

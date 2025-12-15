@@ -2,14 +2,16 @@ package com.neobank.fraud.publisher;
 
 import com.neobank.fraud.model.FraudAlert;
 import com.neobank.fraud.model.Transaction;
-import lombok.extern.slf4j.Slf4j;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Sinks;
 
-@Slf4j
 @Component
 public class FraudAlertPublisher {
+    
+    private static final Logger log = LoggerFactory.getLogger(FraudAlertPublisher.class);
     
     // Sink para FraudAlert subscriptions
     private final Sinks.Many<FraudAlert> fraudAlertSink = Sinks.many().multicast().onBackpressureBuffer();

@@ -6,16 +6,20 @@ import com.neobank.fraud.publisher.FraudAlertPublisher;
 import com.netflix.graphql.dgs.DgsComponent;
 import com.netflix.graphql.dgs.DgsSubscription;
 import com.netflix.graphql.dgs.InputArgument;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import reactor.core.publisher.Flux;
 
-@Slf4j
 @DgsComponent
-@RequiredArgsConstructor
 public class FraudSubscriptionResolver {
     
+    private static final Logger log = LoggerFactory.getLogger(FraudSubscriptionResolver.class);
+    
     private final FraudAlertPublisher fraudAlertPublisher;
+    
+    public FraudSubscriptionResolver(FraudAlertPublisher fraudAlertPublisher) {
+        this.fraudAlertPublisher = fraudAlertPublisher;
+    }
     
     /**
      * Subscription para alertas de fraude en tiempo real

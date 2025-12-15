@@ -8,17 +8,19 @@ import com.netflix.graphql.dgs.DgsQuery;
 import com.netflix.graphql.dgs.DgsMutation;
 import com.netflix.graphql.dgs.InputArgument;
 import graphql.schema.DataFetchingEnvironment;
-import lombok.RequiredArgsConstructor;
 
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
 @DgsComponent
-@RequiredArgsConstructor
 public class LoansResolver {
     
     private final LoansService loansService;
+    
+    public LoansResolver(LoansService loansService) {
+        this.loansService = loansService;
+    }
     
     @DgsQuery
     public Loan loan(@InputArgument String id) {

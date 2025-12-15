@@ -3,7 +3,6 @@ package com.neobank.savings.resolver;
 import com.netflix.graphql.dgs.*;
 import com.neobank.savings.model.SavingsGoalEntity;
 import com.neobank.savings.service.SavingsGoalService;
-import lombok.RequiredArgsConstructor;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -13,10 +12,13 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 @DgsComponent
-@RequiredArgsConstructor
 public class SavingsGoalResolver {
     
     private final SavingsGoalService service;
+    
+    public SavingsGoalResolver(SavingsGoalService service) {
+        this.service = service;
+    }
     
     @DgsQuery
     public Map<String, Object> savingsGoal(@InputArgument String id) {

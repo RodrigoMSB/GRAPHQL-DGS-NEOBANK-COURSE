@@ -4,7 +4,6 @@ import com.neobank.portfolio.data.MockDataService;
 import com.neobank.portfolio.model.Asset;
 import com.neobank.portfolio.model.Performance;
 import com.neobank.portfolio.model.Portfolio;
-import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -39,10 +38,13 @@ import java.util.List;
  */
 @RestController
 @RequestMapping("/api/rest")
-@RequiredArgsConstructor
 public class PortfolioRestController {
     
     private final MockDataService dataService;
+    
+    public PortfolioRestController(MockDataService dataService) {
+        this.dataService = dataService;
+    }
     
     /**
      * GET /api/rest/portfolios
@@ -137,12 +139,33 @@ public class PortfolioRestController {
         return ResponseEntity.ok(portfolio);
     }
     
+    // =========================================================================
     // DTOs para requests
-    @lombok.Data
+    // =========================================================================
+    
     public static class CreatePortfolioRequest {
         private String name;
         private String ownerId;
         private String ownerName;
+        
+        public CreatePortfolioRequest() {
+        }
+        
+        public CreatePortfolioRequest(String name, String ownerId, String ownerName) {
+            this.name = name;
+            this.ownerId = ownerId;
+            this.ownerName = ownerName;
+        }
+        
+        // Getters
+        public String getName() { return name; }
+        public String getOwnerId() { return ownerId; }
+        public String getOwnerName() { return ownerName; }
+        
+        // Setters
+        public void setName(String name) { this.name = name; }
+        public void setOwnerId(String ownerId) { this.ownerId = ownerId; }
+        public void setOwnerName(String ownerName) { this.ownerName = ownerName; }
     }
 }
 
