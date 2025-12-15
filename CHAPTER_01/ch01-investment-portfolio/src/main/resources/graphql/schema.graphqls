@@ -3,252 +3,681 @@
 # Capítulo 1: Fundamentos de GraphQL y Contexto Corporativo
 # =============================================================================
 #
-# Este schema cubre las 5 secciones del capítulo:
+# 🎯 PROPÓSITO DE ESTE ARCHIVO:
+# Este archivo es el CONTRATO de tu API GraphQL. Define:
+# - QUÉ datos existen (Types)
+# - QUÉ valores están permitidos (Enums)
+# - QUÉ puede enviar el cliente (Inputs)
+# - QUÉ puede LEER el cliente (Queries)
+# - QUÉ puede MODIFICAR el cliente (Mutations)
+#
+# 📚 SECCIONES DEL CAPÍTULO QUE CUBRE:
 # 1.1 - Comparación REST vs GraphQL
 # 1.2 - Componentes base: Schema, Types, Queries, Mutations, Resolvers
 # 1.3 - Consultas anidadas y variables
 # 1.4 - Filtros, orden y paginación
 # 1.5 - Tipado, nullabilidad y seguridad
+#
+# 🗂️ ESTRUCTURA DE ESTE ARCHIVO (en orden pedagógico):
+# 1. ENUMS      → Valores permitidos (línea ~30)
+# 2. TYPES      → Estructura de datos que RETORNA el servidor (línea ~80)
+# 3. INPUTS     → Estructura de datos que ENVÍA el cliente (línea ~230)
+# 4. QUERIES    → Operaciones de LECTURA (línea ~300)
+# 5. MUTATIONS  → Operaciones de ESCRITURA (línea ~360)
+#
+# =============================================================================
+
+
+# =============================================================================
+# 1. ENUMS - Valores Permitidos
+# =============================================================================
+#
+# Los Enums definen un conjunto CERRADO de valores válidos.
+# GraphQL valida automáticamente que solo se usen estos valores.
+#
+# 💡 ANALOGÍA: Es como un menú desplegable en un formulario web.
+#    Solo puedes seleccionar las opciones que aparecen.
+#
+# =============================================================================
+
+"""
+Tipos de activos financieros soportados.
+
+🎓 Sección 1.2: Demuestra el uso de Enums en GraphQL
+🎓 Sección 1.5: Validación automática - solo acepta estos valores
+
+💡 EJEMPLO DE USO:
+Si envías assetType: "INVALIDO", GraphQL rechaza la petición automáticamente.
+"""
+enum AssetType {
+  "Acciones de empresas (Apple, Google, etc.)"
+  STOCK
+  
+  "Criptomonedas (Bitcoin, Ethereum, etc.)"
+  CRYPTO
+  
+  "Fondos cotizados - Exchange Traded Funds"
+  ETF
+  
+  "Bonos gubernamentales o corporativos"
+  BOND
+  
+  "Materias primas (oro, plata, petróleo)"
+  COMMODITY
+}
+
+"""
+Campos disponibles para ordenar activos.
+
+🎓 Sección 1.4: Se usa junto con SortDirection para ordenar resultados.
+"""
+enum AssetSortField {
+  "Ordenar por símbolo (alfabético)"
+  SYMBOL
+  
+  "Ordenar por valor total"
+  TOTAL_VALUE
+  
+  "Ordenar por ganancia/pérdida porcentual"
+  PROFIT_LOSS_PERCENT
+  
+  "Ordenar por cantidad de unidades"
+  QUANTITY
+}
+
+"""
+Dirección del ordenamiento.
+"""
+enum SortDirection {
+  "Ascendente (A-Z, 0-9, menor a mayor)"
+  ASC
+  
+  "Descendente (Z-A, 9-0, mayor a menor)"
+  DESC
+}
+
+
+# =============================================================================
+# 2. TYPES - Estructura de Datos (lo que RETORNA el servidor)
+# =============================================================================
+#
+# Los Types definen la FORMA de los datos que el servidor puede retornar.
+# Son como las tablas de una base de datos, pero más flexibles.
+#
+# 💡 ANALOGÍA: Si GraphQL fuera un restaurante, los Types serían
+#    los PLATOS que el chef puede preparar.
+#
+# 🔑 NULLABILIDAD (Sección 1.5):
+#    - String  → Puede ser null
+#    - String! → NUNCA puede ser null (obligatorio)
+#    - [Item!]! → Lista obligatoria con elementos obligatorios
+#
 # =============================================================================
 
 # -----------------------------------------------------------------------------
-# SECCIÓN 1.2 - TYPES (Tipos de datos)
+# 2.1 TYPES DE DOMINIO (Entidades principales del negocio)
 # -----------------------------------------------------------------------------
 
 """
 Representa un portfolio de inversión de un cliente.
-Sección 1.2: Define la estructura de datos principal
-Sección 1.5: Campos non-nullable marcados con !
+
+🎓 Sección 1.2: Define la estructura de datos principal
+🎓 Sección 1.3: Permite consultas anidadas (assets, performance)
+🎓 Sección 1.5: Campos con ! son obligatorios (non-nullable)
+
+💡 EJEMPLO DE CONSULTA ANIDADA:
+```graphql
+query {
+  portfolio(id: "portfolio-001") {
+    name
+    totalValue
+    assets {        ← Anidación nivel 1
+      symbol
+      currentPrice
+    }
+    performance {   ← Anidación nivel 1
+      totalReturn
+      bestPerformer {  ← Anidación nivel 2
+        symbol
+      }
+    }
+  }
+}
+```
 """
 type Portfolio {
-  """ID único del portfolio (non-nullable)"""
+  "ID único del portfolio - NUNCA es null"
   id: ID!
   
-  """Nombre del portfolio"""
+  "Nombre descriptivo del portfolio (ej: 'Retirement Fund')"
   name: String!
   
-  """ID del propietario del portfolio"""
+  "ID del usuario propietario"
   ownerId: String!
   
-  """Nombre del propietario"""
+  "Nombre del usuario propietario"
   ownerName: String!
   
-  """Valor total actual del portfolio en USD"""
+  "Valor total actual del portfolio en USD"
   totalValue: Float!
   
-  """Fecha de creación del portfolio"""
+  "Fecha y hora de creación (formato ISO 8601)"
   createdAt: String!
   
   """
-  Lista de activos en el portfolio
-  Sección 1.3: Relación anidada - permite consultas como portfolio { assets { symbol } }
+  Lista de activos en el portfolio.
+  
+  🎓 Sección 1.3: Relación anidada
+  💡 Permite: portfolio { assets { symbol } }
   """
   assets: [Asset!]!
   
   """
-  Rendimiento histórico del portfolio
-  Sección 1.3: Otra relación anidada
+  Rendimiento histórico del portfolio.
+  
+  🎓 Sección 1.3: Relación anidada opcional
+  💡 Puede ser null si no hay suficientes datos históricos
   """
   performance: Performance
 }
 
 """
-Representa un activo financiero dentro de un portfolio
+Representa un activo financiero dentro de un portfolio.
+
+💡 CAMPOS CALCULADOS:
+- totalValue: Se calcula como quantity * currentPrice
+- profitLossPercent: Se calcula comparando currentPrice vs averageBuyPrice
 """
 type Asset {
-  """ID único del activo"""
+  "ID único del activo"
   id: ID!
   
-  """Símbolo del activo (ej: AAPL, GOOGL, BTC)"""
+  "Símbolo bursátil (ej: AAPL, GOOGL, BTC)"
   symbol: String!
   
-  """Nombre completo del activo"""
+  "Nombre completo del activo (ej: 'Apple Inc.')"
   name: String!
   
-  """Tipo de activo"""
+  "Tipo de activo (STOCK, CRYPTO, ETF, BOND, COMMODITY)"
   assetType: AssetType!
   
-  """Cantidad de unidades"""
+  "Cantidad de unidades que posees"
   quantity: Float!
   
-  """Precio de compra promedio"""
+  "Precio promedio al que compraste"
   averageBuyPrice: Float!
   
-  """Precio actual del mercado"""
+  "Precio actual del mercado"
   currentPrice: Float!
   
-  """Valor total del activo (quantity * currentPrice)"""
+  "Valor total = quantity × currentPrice"
   totalValue: Float!
   
-  """Ganancia/pérdida en porcentaje"""
+  "Ganancia o pérdida en porcentaje"
   profitLossPercent: Float!
   
-  """Fecha de última actualización"""
+  "Última vez que se actualizó el precio"
   lastUpdated: String!
 }
 
 """
-Enum para tipos de activos
-Sección 1.2: Demuestra el uso de Enums en GraphQL
-Sección 1.5: Validación automática - solo acepta estos valores
-"""
-enum AssetType {
-  STOCK
-  CRYPTO
-  ETF
-  BOND
-  COMMODITY
-}
+Representa el rendimiento histórico de un portfolio.
 
-"""
-Representa el rendimiento histórico de un portfolio
+🎓 Sección 1.3: Se puede consultar anidado dentro de Portfolio
 """
 type Performance {
-  """Rendimiento total desde creación (%)"""
+  "Rendimiento total desde la creación (%)"
   totalReturn: Float!
   
-  """Rendimiento en el último año (%)"""
+  "Rendimiento en el último año (%)"
   yearReturn: Float!
   
-  """Rendimiento en el último mes (%)"""
+  "Rendimiento en el último mes (%)"
   monthReturn: Float!
   
-  """Rendimiento en la última semana (%)"""
+  "Rendimiento en la última semana (%)"
   weekReturn: Float!
   
-  """Mejor activo del portfolio"""
+  "Activo con mejor rendimiento (puede ser null si no hay activos)"
   bestPerformer: Asset
   
-  """Peor activo del portfolio"""
+  "Activo con peor rendimiento (puede ser null si no hay activos)"
   worstPerformer: Asset
 }
 
 # -----------------------------------------------------------------------------
-# SECCIÓN 1.4 - INPUTS (Para filtros y argumentos)
+# 2.2 TYPES DE PAGINACIÓN (Patrón Relay/Connection)
+# -----------------------------------------------------------------------------
+#
+# 🎓 Sección 1.4: Implementa cursor-based pagination
+#
+# 💡 ¿POR QUÉ CURSOR Y NO OFFSET?
+# - Offset: "Dame los items 20-30" → Problemas si se insertan/eliminan datos
+# - Cursor: "Dame 10 items después de X" → Siempre consistente
+#
+# 📦 ESTRUCTURA:
+# AssetConnection
+# ├── edges[] ─────────── Lista de resultados
+# │   ├── node ────────── El activo
+# │   └── cursor ──────── Posición única de este item
+# ├── pageInfo ────────── Metadatos de paginación
+# │   ├── hasNextPage
+# │   ├── hasPreviousPage
+# │   ├── startCursor
+# │   └── endCursor
+# └── totalCount ──────── Total de elementos (opcional)
+#
 # -----------------------------------------------------------------------------
 
 """
-Filtros para consultar activos
-Sección 1.4: Permite filtrar por diferentes criterios
-"""
-input AssetFilterInput {
-  """Filtrar por tipo de activo"""
-  assetType: AssetType
-  
-  """Filtrar por valor mínimo"""
-  minValue: Float
-  
-  """Filtrar por valor máximo"""
-  maxValue: Float
-  
-  """Filtrar por símbolo (búsqueda parcial)"""
-  symbolContains: String
-}
+Respuesta paginada de activos (Patrón Relay Connection).
 
-"""
-Opciones de ordenamiento para activos
-Sección 1.4: Define cómo ordenar los resultados
-"""
-enum AssetSortField {
-  SYMBOL
-  TOTAL_VALUE
-  PROFIT_LOSS_PERCENT
-  QUANTITY
-}
+🎓 Sección 1.4: Estructura estándar para paginación
 
-"""
-Dirección del ordenamiento
-"""
-enum SortDirection {
-  ASC
-  DESC
+💡 EJEMPLO DE USO:
+```graphql
+query {
+  assets(portfolioId: "001", pagination: { limit: 5 }) {
+    totalCount
+    edges {
+      cursor
+      node { symbol }
+    }
+    pageInfo {
+      hasNextPage
+      endCursor
+    }
+  }
 }
-
-"""
-Input para ordenar activos
-"""
-input AssetSortInput {
-  field: AssetSortField!
-  direction: SortDirection!
-}
-
-"""
-Input para paginación
-Sección 1.4: Implementa cursor-based pagination
-"""
-input PaginationInput {
-  """Número de elementos por página"""
-  limit: Int = 10
-  
-  """Cursor para la siguiente página"""
-  after: String
-}
-
-"""
-Respuesta paginada de activos
-Sección 1.4: Estructura estándar para paginación
+```
 """
 type AssetConnection {
-  """Lista de activos en esta página"""
+  "Lista de activos en esta página (cada uno con su cursor)"
   edges: [AssetEdge!]!
   
-  """Información de paginación"""
+  "Información para navegar entre páginas"
   pageInfo: PageInfo!
   
-  """Total de elementos (opcional)"""
+  "Total de elementos en toda la colección (útil para mostrar 'Página 1 de N')"
   totalCount: Int
 }
 
 """
-Edge de un activo (patrón Relay)
+Envuelve un Asset con su cursor de paginación.
+
+💡 El patrón Edge permite agregar metadatos por elemento
+   sin contaminar el tipo original (Asset).
 """
 type AssetEdge {
-  """El activo"""
+  "El activo en sí"
   node: Asset!
   
-  """Cursor de este elemento"""
+  "Cursor único para este elemento (usado para paginar)"
   cursor: String!
 }
 
 """
-Información de paginación
+Metadatos de paginación.
 """
 type PageInfo {
-  """¿Hay más páginas?"""
+  "¿Existen más elementos después de esta página?"
   hasNextPage: Boolean!
   
-  """¿Hay páginas anteriores?"""
+  "¿Existen elementos antes de esta página?"
   hasPreviousPage: Boolean!
   
-  """Cursor del primer elemento"""
+  "Cursor del primer elemento de esta página"
   startCursor: String
   
-  """Cursor del último elemento"""
+  "Cursor del último elemento de esta página"
   endCursor: String
 }
 
 # -----------------------------------------------------------------------------
-# SECCIÓN 1.2 y 1.3 - QUERIES (Consultas)
+# 2.3 TYPES DE RESPUESTA (Para Mutations)
+# -----------------------------------------------------------------------------
+#
+# 💡 PATRÓN DE RESPUESTA:
+# En vez de retornar solo el objeto creado, retornamos un objeto
+# que incluye: success, message, y opcionalmente el objeto.
+#
+# Esto permite manejar errores de negocio de forma elegante.
+#
 # -----------------------------------------------------------------------------
 
+"""
+Respuesta genérica para mutations.
+
+💡 PATRÓN: Siempre incluye success + message para feedback claro.
+"""
+type MutationResponse {
+  "¿La operación fue exitosa?"
+  success: Boolean!
+  
+  "Mensaje descriptivo (útil para mostrar al usuario)"
+  message: String!
+  
+  "Código de error/éxito (útil para internacionalización)"
+  code: String
+}
+
+"""
+Respuesta al crear un portfolio.
+"""
+type CreatePortfolioResponse {
+  "¿Se creó exitosamente?"
+  success: Boolean!
+  
+  "Mensaje descriptivo"
+  message: String!
+  
+  "El portfolio creado (null si hubo error)"
+  portfolio: Portfolio
+}
+
+"""
+Respuesta al añadir un activo.
+"""
+type AddAssetResponse {
+  "¿Se añadió exitosamente?"
+  success: Boolean!
+  
+  "Mensaje descriptivo"
+  message: String!
+  
+  "El activo añadido (null si hubo error)"
+  asset: Asset
+}
+
+
+# =============================================================================
+# 3. INPUTS - Datos que ENVÍA el Cliente
+# =============================================================================
+#
+# Los Inputs definen la FORMA de los datos que el cliente puede enviar.
+# Son similares a los Types, pero solo para ENTRADA de datos.
+#
+# 💡 ANALOGÍA: Si los Types son los platos del menú,
+#    los Inputs son el FORMULARIO DE PEDIDO.
+#
+# 🔑 DIFERENCIA CLAVE:
+#    - type  → Lo que el servidor RETORNA (salida)
+#    - input → Lo que el cliente ENVÍA (entrada)
+#
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# 3.1 INPUTS PARA QUERIES (Filtros, Orden, Paginación)
+# -----------------------------------------------------------------------------
+
+"""
+Filtros para consultar activos.
+
+🎓 Sección 1.4: Permite filtrar por diferentes criterios
+
+💡 EJEMPLO:
+```graphql
+query {
+  assets(
+    portfolioId: "001"
+    filter: { assetType: STOCK, minValue: 1000 }
+  ) { ... }
+}
+```
+
+💡 TODOS LOS CAMPOS SON OPCIONALES:
+Puedes usar uno, varios, o ninguno.
+"""
+input AssetFilterInput {
+  "Filtrar por tipo de activo (STOCK, CRYPTO, etc.)"
+  assetType: AssetType
+  
+  "Solo activos con valor >= minValue"
+  minValue: Float
+  
+  "Solo activos con valor <= maxValue"
+  maxValue: Float
+  
+  "Buscar símbolos que contengan este texto (ej: 'AA' encuentra 'AAPL')"
+  symbolContains: String
+}
+
+"""
+Opciones de ordenamiento para activos.
+
+🎓 Sección 1.4: Define cómo ordenar los resultados
+
+💡 EJEMPLO:
+```graphql
+query {
+  assets(
+    portfolioId: "001"
+    sort: { field: TOTAL_VALUE, direction: DESC }
+  ) { ... }
+}
+```
+"""
+input AssetSortInput {
+  "Campo por el cual ordenar"
+  field: AssetSortField!
+  
+  "Dirección del orden (ASC o DESC)"
+  direction: SortDirection!
+}
+
+"""
+Opciones de paginación.
+
+🎓 Sección 1.4: Implementa cursor-based pagination
+
+💡 EJEMPLO - Primera página:
+```graphql
+query {
+  assets(portfolioId: "001", pagination: { limit: 10 }) {
+    edges { node { symbol } }
+    pageInfo { endCursor hasNextPage }
+  }
+}
+```
+
+💡 EJEMPLO - Siguiente página:
+```graphql
+query {
+  assets(
+    portfolioId: "001"
+    pagination: { limit: 10, after: "cursor-del-ultimo-elemento" }
+  ) { ... }
+}
+```
+"""
+input PaginationInput {
+  "Cantidad de elementos por página (default: 10)"
+  limit: Int = 10
+  
+  "Cursor del elemento después del cual empezar (para paginación)"
+  after: String
+}
+
+# -----------------------------------------------------------------------------
+# 3.2 INPUTS PARA MUTATIONS (Crear, Modificar)
+# -----------------------------------------------------------------------------
+
+"""
+Datos necesarios para crear un nuevo portfolio.
+
+💡 EJEMPLO:
+```graphql
+mutation {
+  createPortfolio(input: { name: "Mi Portfolio 2024" }) {
+    success
+    portfolio { id name }
+  }
+}
+```
+"""
+input CreatePortfolioInput {
+  "Nombre del nuevo portfolio (obligatorio)"
+  name: String!
+}
+
+"""
+Datos necesarios para añadir un activo a un portfolio.
+
+💡 EJEMPLO:
+```graphql
+mutation {
+  addAsset(input: {
+    portfolioId: "portfolio-001"
+    symbol: "TSLA"
+    assetType: STOCK
+    quantity: 10
+    buyPrice: 250.00
+  }) {
+    success
+    asset { id symbol totalValue }
+  }
+}
+```
+"""
+input AddAssetInput {
+  "ID del portfolio donde añadir el activo"
+  portfolioId: ID!
+  
+  "Símbolo del activo (ej: AAPL, BTC)"
+  symbol: String!
+  
+  "Tipo de activo"
+  assetType: AssetType!
+  
+  "Cantidad de unidades a comprar"
+  quantity: Float!
+  
+  "Precio de compra por unidad"
+  buyPrice: Float!
+}
+
+
+# =============================================================================
+# 4. QUERIES - Operaciones de LECTURA
+# =============================================================================
+#
+# Las Queries son las operaciones para LEER datos.
+# Equivalen a GET en REST.
+#
+# 💡 ANALOGÍA: Son como PREGUNTAS que le haces al servidor.
+#    "¿Cuáles son mis portfolios?"
+#    "¿Cuál es el portfolio con ID X?"
+#
+# 🔑 REGLA IMPORTANTE:
+# Las queries NUNCA deben modificar datos. Solo lectura.
+#
+# =============================================================================
+
 type Query {
+  
+  # ---------------------------------------------------------------------------
+  # QUERIES DE PORTFOLIO
+  # ---------------------------------------------------------------------------
+  
   """
-  Obtiene todos los portfolios del usuario autenticado
-  Sección 1.5: Requiere autenticación (se valida en el resolver)
+  Obtiene todos los portfolios del usuario autenticado.
+  
+  🎓 Sección 1.5: Requiere autenticación (se valida en el resolver)
+  
+  💡 EJEMPLO:
+  ```graphql
+  query {
+    myPortfolios {
+      id
+      name
+      totalValue
+    }
+  }
+  ```
+  
+  💡 RETORNA: Lista SIEMPRE (nunca null, puede ser vacía [])
   """
   myPortfolios: [Portfolio!]!
   
   """
-  Obtiene un portfolio por ID
-  Sección 1.3: Acepta variables - Ejemplo: query($id: ID!) { portfolio(id: $id) { name } }
-  Sección 1.5: El ID es obligatorio (non-nullable)
+  Obtiene un portfolio específico por su ID.
+  
+  🎓 Sección 1.3: Acepta variables
+  🎓 Sección 1.5: El argumento ID es obligatorio (!)
+  
+  💡 EJEMPLO CON VARIABLE:
+  ```graphql
+  query GetPortfolio($id: ID!) {
+    portfolio(id: $id) {
+      name
+      totalValue
+      assets { symbol }
+    }
+  }
+  
+  # Variables: { "id": "portfolio-001" }
+  ```
+  
+  💡 RETORNA: Portfolio o null (si no existe)
   """
   portfolio(id: ID!): Portfolio
   
   """
-  Obtiene todos los activos de un portfolio
-  Sección 1.3: Consulta anidada - Puede usarse junto con portfolio
-  Sección 1.4: Acepta filtros, ordenamiento y paginación
+  Obtiene el rendimiento de un portfolio.
+  
+  🎓 Sección 1.3: También accesible via: portfolio { performance { ... } }
+  
+  💡 EJEMPLO:
+  ```graphql
+  query {
+    portfolioPerformance(portfolioId: "portfolio-001") {
+      totalReturn
+      bestPerformer { symbol }
+    }
+  }
+  ```
+  """
+  portfolioPerformance(portfolioId: ID!): Performance
+  
+  # ---------------------------------------------------------------------------
+  # QUERIES DE ASSETS
+  # ---------------------------------------------------------------------------
+  
+  """
+  Obtiene activos de un portfolio con filtros, orden y paginación.
+  
+  🎓 Sección 1.4: Demuestra filtros, ordenamiento y paginación
+  
+  💡 ARGUMENTOS:
+  - portfolioId: OBLIGATORIO - ¿De qué portfolio?
+  - filter: Opcional - Filtrar resultados
+  - sort: Opcional - Ordenar resultados
+  - pagination: Opcional - Paginar resultados
+  
+  💡 EJEMPLO COMPLETO:
+  ```graphql
+  query {
+    assets(
+      portfolioId: "portfolio-001"
+      filter: { assetType: STOCK, minValue: 1000 }
+      sort: { field: TOTAL_VALUE, direction: DESC }
+      pagination: { limit: 5 }
+    ) {
+      totalCount
+      edges {
+        cursor
+        node {
+          symbol
+          totalValue
+        }
+      }
+      pageInfo {
+        hasNextPage
+        endCursor
+      }
+    }
+  }
+  ```
   """
   assets(
     portfolioId: ID!
@@ -258,121 +687,187 @@ type Query {
   ): AssetConnection!
   
   """
-  Búsqueda de activos por símbolo
-  Sección 1.3: Ejemplo de query simple con variable
+  Busca un activo por su símbolo bursátil.
+  
+  🎓 Sección 1.3: Query simple con variable
+  
+  💡 EJEMPLO:
+  ```graphql
+  query BuscarActivo($simbolo: String!) {
+    searchAsset(symbol: $simbolo) {
+      name
+      currentPrice
+      assetType
+    }
+  }
+  
+  # Variables: { "simbolo": "AAPL" }
+  ```
+  
+  💡 RETORNA: Asset o null (si no existe)
   """
   searchAsset(symbol: String!): Asset
-  
-  """
-  Obtiene el rendimiento de un portfolio
-  Sección 1.3: Se puede anidar con portfolio { performance { totalReturn } }
-  """
-  portfolioPerformance(portfolioId: ID!): Performance
 }
 
-# -----------------------------------------------------------------------------
-# SECCIÓN 1.2 - MUTATIONS (Modificaciones)
-# -----------------------------------------------------------------------------
 
-"""
-Input para crear un nuevo portfolio
-"""
-input CreatePortfolioInput {
-  name: String!
-}
-
-"""
-Input para añadir un activo a un portfolio
-"""
-input AddAssetInput {
-  portfolioId: ID!
-  symbol: String!
-  assetType: AssetType!
-  quantity: Float!
-  buyPrice: Float!
-}
-
-"""
-Respuesta de una mutación (patrón común)
-"""
-type MutationResponse {
-  """¿La operación fue exitosa?"""
-  success: Boolean!
-  
-  """Mensaje descriptivo"""
-  message: String!
-  
-  """Código de error (si aplica)"""
-  code: String
-}
-
-"""
-Respuesta al crear un portfolio
-"""
-type CreatePortfolioResponse {
-  success: Boolean!
-  message: String!
-  portfolio: Portfolio
-}
-
-"""
-Respuesta al añadir un activo
-"""
-type AddAssetResponse {
-  success: Boolean!
-  message: String!
-  asset: Asset
-}
+# =============================================================================
+# 5. MUTATIONS - Operaciones de ESCRITURA
+# =============================================================================
+#
+# Las Mutations son las operaciones para MODIFICAR datos.
+# Equivalen a POST, PUT, DELETE en REST.
+#
+# 💡 ANALOGÍA: Son como ÓRDENES que le das al servidor.
+#    "Crea un nuevo portfolio"
+#    "Añade este activo"
+#    "Elimina aquel activo"
+#
+# 🔑 PATRÓN DE RESPUESTA:
+# Todas las mutations retornan un objeto con:
+# - success: Boolean! → ¿Funcionó?
+# - message: String!  → ¿Qué pasó?
+# - objeto: Type?     → El objeto creado/modificado (si success=true)
+#
+# =============================================================================
 
 type Mutation {
+  
   """
-  Crea un nuevo portfolio
-  Sección 1.2: Demuestra mutations básicas
-  Sección 1.5: Requiere autenticación
+  Crea un nuevo portfolio para el usuario autenticado.
+  
+  🎓 Sección 1.2: Mutation básica
+  🎓 Sección 1.5: Requiere autenticación
+  
+  💡 EJEMPLO:
+  ```graphql
+  mutation {
+    createPortfolio(input: { name: "Growth Portfolio 2024" }) {
+      success
+      message
+      portfolio {
+        id
+        name
+        createdAt
+      }
+    }
+  }
+  ```
+  
+  💡 EL CLIENTE DECIDE QUÉ RETORNAR:
+  Si solo necesitas el ID:
+  ```graphql
+  mutation {
+    createPortfolio(input: { name: "Test" }) {
+      success
+      portfolio { id }
+    }
+  }
+  ```
   """
   createPortfolio(input: CreatePortfolioInput!): CreatePortfolioResponse!
   
   """
-  Añade un activo a un portfolio existente
-  Sección 1.2: Mutation más compleja con múltiples argumentos
+  Añade un activo a un portfolio existente.
+  
+  🎓 Sección 1.2: Mutation con múltiples campos en el input
+  
+  💡 EJEMPLO:
+  ```graphql
+  mutation AgregarActivo($input: AddAssetInput!) {
+    addAsset(input: $input) {
+      success
+      message
+      asset {
+        id
+        symbol
+        totalValue
+        profitLossPercent
+      }
+    }
+  }
+  
+  # Variables:
+  # {
+  #   "input": {
+  #     "portfolioId": "portfolio-001",
+  #     "symbol": "NVDA",
+  #     "assetType": "STOCK",
+  #     "quantity": 15,
+  #     "buyPrice": 450.00
+  #   }
+  # }
+  ```
   """
   addAsset(input: AddAssetInput!): AddAssetResponse!
   
   """
-  Elimina un activo de un portfolio
-  Sección 1.2: Mutation de eliminación
+  Elimina un activo de un portfolio.
+  
+  🎓 Sección 1.2: Mutation de eliminación
+  
+  💡 EJEMPLO:
+  ```graphql
+  mutation {
+    removeAsset(
+      portfolioId: "portfolio-001"
+      assetId: "asset-003"
+    ) {
+      success
+      message
+      code
+    }
+  }
+  ```
+  
+  💡 CÓDIGOS DE RESPUESTA:
+  - code: "ASSET_REMOVED" → Eliminado exitosamente
+  - code: "ASSET_NOT_FOUND" → No se encontró el activo
   """
   removeAsset(portfolioId: ID!, assetId: ID!): MutationResponse!
 }
 
-# -----------------------------------------------------------------------------
-# NOTAS PEDAGÓGICAS
-# -----------------------------------------------------------------------------
+
+# =============================================================================
+# RESUMEN PEDAGÓGICO
+# =============================================================================
 #
-# Este schema demuestra:
+# 📊 ESTADÍSTICAS DE ESTE SCHEMA:
+# - 3 Enums (AssetType, AssetSortField, SortDirection)
+# - 9 Types (Portfolio, Asset, Performance, AssetConnection, AssetEdge, 
+#            PageInfo, MutationResponse, CreatePortfolioResponse, AddAssetResponse)
+# - 5 Inputs (AssetFilterInput, AssetSortInput, PaginationInput,
+#             CreatePortfolioInput, AddAssetInput)
+# - 5 Queries (myPortfolios, portfolio, portfolioPerformance, assets, searchAsset)
+# - 3 Mutations (createPortfolio, addAsset, removeAsset)
 #
-# ✅ Sección 1.1: Al comparar con REST, se ve cómo un solo endpoint GraphQL
-#    reemplaza múltiples endpoints REST (/portfolios, /portfolios/:id/assets, etc.)
+# 🎯 CONCEPTOS DEMOSTRADOS:
 #
-# ✅ Sección 1.2: Todos los componentes de GraphQL:
-#    - Types (Portfolio, Asset, Performance)
-#    - Queries (portfolio, assets, myPortfolios)
-#    - Mutations (createPortfolio, addAsset, removeAsset)
-#    - Enums (AssetType, SortDirection)
-#    - Interfaces implícitas (MutationResponse)
+# ✅ Sección 1.1 - REST vs GraphQL:
+#    Un solo endpoint GraphQL reemplaza múltiples endpoints REST:
+#    - GET /portfolios → query { myPortfolios }
+#    - GET /portfolios/:id → query { portfolio(id: "...") }
+#    - GET /portfolios/:id/assets → query { portfolio(id: "...") { assets } }
+#    - POST /portfolios → mutation { createPortfolio }
 #
-# ✅ Sección 1.3: Consultas anidadas y variables:
-#    - portfolio { assets { symbol } }
-#    - query($id: ID!) { portfolio(id: $id) { ... } }
+# ✅ Sección 1.2 - Componentes de GraphQL:
+#    - Types: Portfolio, Asset, Performance
+#    - Queries: myPortfolios, portfolio, searchAsset
+#    - Mutations: createPortfolio, addAsset, removeAsset
+#    - Enums: AssetType, SortDirection
+#    - Inputs: CreatePortfolioInput, AddAssetInput
 #
-# ✅ Sección 1.4: Filtros, orden y paginación:
-#    - AssetFilterInput para filtrar
-#    - AssetSortInput para ordenar
-#    - PaginationInput + AssetConnection para paginar
+# ✅ Sección 1.3 - Consultas anidadas y variables:
+#    - Anidación: portfolio { assets { symbol } performance { totalReturn } }
+#    - Variables: query($id: ID!) { portfolio(id: $id) { ... } }
 #
-# ✅ Sección 1.5: Tipado y nullabilidad:
-#    - Campos con ! son obligatorios
+# ✅ Sección 1.4 - Filtros, orden y paginación:
+#    - Filtros: AssetFilterInput
+#    - Orden: AssetSortInput
+#    - Paginación: PaginationInput + AssetConnection (patrón Relay)
+#
+# ✅ Sección 1.5 - Tipado y nullabilidad:
+#    - Campos obligatorios: ! (non-nullable)
+#    - Listas: [Item!]! (lista y elementos obligatorios)
 #    - Validación automática de tipos
-#    - Autenticación se maneja en los resolvers (context)
 #
 # =============================================================================

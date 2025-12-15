@@ -47,7 +47,7 @@ query GetMyPortfolios {
 
 # PRUEBA ESTO:
 # 1. Copia esta query
-# 2. Abre http://localhost:8080/graphiql
+# 2. Abre http://localhost:8080/graphiql.html
 # 3. Pégala en el panel izquierdo
 # 4. Presiona el botón "Play"
 # 5. Observa que SOLO recibes los 4 campos solicitados
