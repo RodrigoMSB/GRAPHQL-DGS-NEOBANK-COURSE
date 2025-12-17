@@ -2,9 +2,51 @@ package com.neobank.cashback.model.input;
 
 import com.neobank.cashback.model.CashbackTier;
 
+/**
+ * Input para actualizar el tier de un usuario.
+ * 
+ * 🎓 SECCIÓN 2.2: INPUT TYPES
+ * 
+ * Este input permite a los administradores cambiar el nivel
+ * de un usuario en el programa de cashback.
+ * 
+ * 📦 CAMPOS:
+ * - userId: Usuario a actualizar
+ * - newTier: Nuevo nivel (BRONZE, SILVER, GOLD, PLATINUM)
+ * - reason: Motivo del cambio (para auditoría)
+ * 
+ * 💡 RAZONES COMUNES:
+ * - "PROMOTION": Promoción por volumen de compras
+ * - "SPECIAL_OFFER": Oferta especial temporal
+ * - "LOYALTY_REWARD": Recompensa por antigüedad
+ * - "ADJUSTMENT": Ajuste administrativo
+ * 
+ * 💡 EJEMPLO DE USO:
+ * ```graphql
+ * mutation {
+ *   updateUserTier(input: {
+ *     userId: "user-001"
+ *     newTier: PLATINUM
+ *     reason: "Promoción por alto volumen de compras"
+ *   }) {
+ *     success
+ *     message
+ *     user {
+ *       tier
+ *     }
+ *   }
+ * }
+ * ```
+ */
 public class UpdateUserTierInput {
+    
+    /** ID del usuario a actualizar */
     private String userId;
+    
+    /** Nuevo tier a asignar */
     private CashbackTier newTier;
+    
+    /** Razón del cambio (para auditoría) */
     private String reason;
     
     // =========================================================================

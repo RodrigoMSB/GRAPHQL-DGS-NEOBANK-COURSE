@@ -1,54 +1,807 @@
+# ==============================================================================
+# CAPÍTULO 4: SMART SAVINGS GOALS - GRAPHQL + JPA + POSTGRESQL
+# ==============================================================================
+#
+# 🎯 TEMA: Persistencia de datos con JPA y transacciones en GraphQL
+#
+# Este capítulo introduce:
+# - Integración de Netflix DGS con Spring Data JPA
+# - Entidades JPA mapeadas a PostgreSQL
+# - Transacciones atómicas con @Transactional
+# - Campos calculados (progressPercentage)
+# - Patrón de respuesta estructurada (success/message/data)
+#
+# ==============================================================================
+# MAPEO COMPLETO: SCHEMA GRAPHQL ↔ CLASES JAVA
+# ==============================================================================
+#
+# ┌────────────────────────────────────────────────────────────────────────────┐
+# │  SCHEMA GRAPHQL              │  IMPLEMENTACIÓN JAVA                       │
+# ├────────────────────────────────────────────────────────────────────────────┤
+# │  scalar Money                │  java.math.BigDecimal (MoneyScalar.java)   │
+# ├────────────────────────────────────────────────────────────────────────────┤
+# │  enum GoalStatus             │  SavingsGoalEntity.GoalStatus (inner enum) │
+# │  enum GoalCategory           │  SavingsGoalEntity.GoalCategory (inner)    │
+# ├────────────────────────────────────────────────────────────────────────────┤
+# │  type SavingsGoal            │  SavingsGoalEntity.java → Map<String,Obj>  │
+# │  type SavingsGoalResponse    │  Map<String, Object> en Resolver           │
+# ├────────────────────────────────────────────────────────────────────────────┤
+# │  input CreateSavingsGoalInput│  Map<String, Object> en Resolver           │
+# ├────────────────────────────────────────────────────────────────────────────┤
+# │  Query.savingsGoal           │  SavingsGoalResolver.savingsGoal()         │
+# │  Query.savingsGoals          │  SavingsGoalResolver.savingsGoals()        │
+# │  Query.activeSavingsGoals    │  SavingsGoalResolver.activeSavingsGoals()  │
+# ├────────────────────────────────────────────────────────────────────────────┤
+# │  Mutation.createSavingsGoal  │  SavingsGoalResolver.createSavingsGoal()   │
+# └────────────────────────────────────────────────────────────────────────────┘
+#
+# ==============================================================================
+# 🔥 TEMA CENTRAL: PERSISTENCIA CON JPA
+# ==============================================================================
+#
+# ARQUITECTURA DE CAPAS:
+# ```
+# ┌─────────────────┐
+# │  GraphQL Schema │  ← Contrato API (este archivo)
+# └────────┬────────┘
+#          │
+# ┌────────▼────────┐
+# │    Resolver     │  ← SavingsGoalResolver.java (@DgsComponent)
+# └────────┬────────┘
+#          │
+# ┌────────▼────────┐
+# │    Service      │  ← SavingsGoalService.java (@Transactional)
+# └────────┬────────┘
+#          │
+# ┌────────▼────────┐
+# │   Repository    │  ← SavingsGoalRepository.java (Spring Data JPA)
+# └────────┬────────┘
+#          │
+# ┌────────▼────────┐
+# │   PostgreSQL    │  ← Tabla: savings_goals
+# └─────────────────┘
+# ```
+#
+# ==============================================================================
+
+
+# ==============================================================================
+# CUSTOM SCALAR
+# ==============================================================================
+#
+# 🎓 SECCIÓN 4.2: Scalar para valores monetarios
+#
+# IMPLEMENTACIÓN: scalar/MoneyScalar.java
+# ```java
+# @DgsScalar(name = "Money")
+# public class MoneyScalar implements Coercing<BigDecimal, String> {
+#     @Override
+#     public String serialize(Object dataFetcherResult) {
+#         return ((BigDecimal) dataFetcherResult).toPlainString();
+#     }
+#     
+#     @Override
+#     public BigDecimal parseValue(Object input) {
+#         return new BigDecimal(input.toString());
+#     }
+# }
+# ```
+#
+# 💡 ¿POR QUÉ BIGDECIMAL PARA DINERO?
+# ```java
+# double d = 0.1 + 0.2;  // = 0.30000000000000004 ❌
+# BigDecimal b = new BigDecimal("0.1").add(new BigDecimal("0.2"));  // = 0.3 ✅
+# ```
+# ==============================================================================
+
+"Valor monetario con precisión decimal → java.math.BigDecimal"
 scalar Money
 
+
+# ==============================================================================
+# ENUMS
+# ==============================================================================
+
+"""
+Estados posibles de una meta de ahorro.
+
+IMPLEMENTACIÓN JAVA: SavingsGoalEntity.GoalStatus (inner enum)
+```java
+public enum GoalStatus {
+    ACTIVE,     // Meta activa, aceptando depósitos
+    PAUSED,     // Meta pausada temporalmente
+    COMPLETED,  // Meta completada (currentAmount >= targetAmount)
+    CANCELLED   // Meta cancelada por el usuario
+}
+```
+
+CICLO DE VIDA:
+```
+ACTIVE → COMPLETED (al alcanzar targetAmount)
+       → PAUSED (usuario pausa temporalmente)
+       → CANCELLED (usuario cancela)
+```
+
+VALIDACIÓN EN SERVICE:
+```java
+// SavingsGoalService.deposit()
+if (goal.getStatus() != GoalStatus.ACTIVE) {
+    throw new IllegalStateException("Cannot deposit to a " + goal.getStatus() + " goal");
+}
+```
+"""
 enum GoalStatus {
-  ACTIVE
-  PAUSED
-  COMPLETED
-  CANCELLED
+    "Meta activa, aceptando depósitos"
+    ACTIVE
+    
+    "Meta pausada temporalmente por el usuario"
+    PAUSED
+    
+    "Meta completada (currentAmount >= targetAmount)"
+    COMPLETED
+    
+    "Meta cancelada por el usuario"
+    CANCELLED
 }
 
+"""
+Categorías de metas de ahorro.
+
+IMPLEMENTACIÓN JAVA: SavingsGoalEntity.GoalCategory (inner enum)
+```java
+public enum GoalCategory {
+    EMERGENCY_FUND,  // Fondo de emergencia (3-6 meses de gastos)
+    VACATION,        // Vacaciones y viajes
+    HOME_PURCHASE,   // Enganche para casa
+    EDUCATION,       // Universidad, cursos, certificaciones
+    RETIREMENT,      // Ahorro para retiro
+    INVESTMENT,      // Capital para inversiones
+    OTHER            // Otras metas
+}
+```
+
+💡 USO EN NEGOCIO:
+- Permite organizar y filtrar metas
+- Potencialmente aplicar reglas diferentes por categoría
+- Analytics: "¿Cuánto ahorran los usuarios para vacaciones vs emergencia?"
+"""
 enum GoalCategory {
-  EMERGENCY_FUND
-  VACATION
-  HOME_PURCHASE
-  EDUCATION
-  RETIREMENT
-  INVESTMENT
-  OTHER
+    "Fondo de emergencia (3-6 meses de gastos)"
+    EMERGENCY_FUND
+    
+    "Vacaciones y viajes"
+    VACATION
+    
+    "Enganche para casa"
+    HOME_PURCHASE
+    
+    "Educación (universidad, cursos, certificaciones)"
+    EDUCATION
+    
+    "Ahorro para retiro"
+    RETIREMENT
+    
+    "Capital para inversiones"
+    INVESTMENT
+    
+    "Otras metas personales"
+    OTHER
 }
 
-type SavingsGoal {
-  id: ID!
-  userId: ID!
-  name: String!
-  description: String
-  targetAmount: Money!
-  currentAmount: Money!
-  category: GoalCategory!
-  status: GoalStatus!
-  progressPercentage: Float!
+
+# ==============================================================================
+# DOMAIN TYPES
+# ==============================================================================
+
+"""
+Meta de ahorro de un usuario.
+
+🎓 SECCIÓN 4.2: ENTIDAD JPA
+
+IMPLEMENTACIÓN JAVA: model/SavingsGoalEntity.java
+```java
+@Entity
+@Table(name = "savings_goals")
+public class SavingsGoalEntity {
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long goalId;
+    
+    @Column(nullable = false)
+    private Long userId;
+    
+    @Column(nullable = false)
+    private String name;
+    
+    private String description;
+    
+    @Column(nullable = false, precision = 15, scale = 2)
+    private BigDecimal targetAmount;
+    
+    @Column(nullable = false, precision = 15, scale = 2)
+    private BigDecimal currentAmount = BigDecimal.ZERO;
+    
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    private GoalCategory category;
+    
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    private GoalStatus status = GoalStatus.ACTIVE;
 }
+```
+
+MAPEO A POSTGRESQL:
+```
+┌─────────────────────────────────────────────────────────────┐
+│  Clase Java                    Tabla PostgreSQL            │
+│  ──────────────────────────────────────────────────────────│
+│  SavingsGoalEntity      →      savings_goals               │
+│  goalId (Long)          →      goal_id (BIGSERIAL PK)      │
+│  userId (Long)          →      user_id (BIGINT NOT NULL)   │
+│  name (String)          →      name (VARCHAR NOT NULL)     │
+│  description (String)   →      description (VARCHAR)       │
+│  targetAmount (BigDec)  →      target_amount (NUMERIC)     │
+│  currentAmount (BigDec) →      current_amount (NUMERIC)    │
+│  category (Enum)        →      category (VARCHAR)          │
+│  status (Enum)          →      status (VARCHAR)            │
+└─────────────────────────────────────────────────────────────┘
+```
+
+⚠️ TRANSFORMACIÓN ENTITY → GRAPHQL:
+El resolver transforma la entidad a Map porque los nombres difieren:
+```java
+// SavingsGoalResolver.toGraphQL()
+private Map<String, Object> toGraphQL(SavingsGoalEntity entity) {
+    Map<String, Object> map = new HashMap<>();
+    map.put("id", entity.getGoalId().toString());  // goalId → id
+    map.put("userId", entity.getUserId().toString());
+    map.put("name", entity.getName());
+    map.put("description", entity.getDescription());
+    map.put("targetAmount", entity.getTargetAmount());
+    map.put("currentAmount", entity.getCurrentAmount());
+    map.put("category", entity.getCategory().name());
+    map.put("status", entity.getStatus().name());
+    map.put("progressPercentage", calculateProgress(entity));  // CALCULADO
+    return map;
+}
+```
+"""
+type SavingsGoal {
+    "ID único de la meta (goalId en Entity)"
+    id: ID!
+    
+    "ID del usuario propietario"
+    userId: ID!
+    
+    "Nombre descriptivo (ej: 'Vacaciones a Japón')"
+    name: String!
+    
+    "Descripción detallada opcional"
+    description: String
+    
+    "Monto objetivo a alcanzar"
+    targetAmount: Money!
+    
+    "Monto actualmente ahorrado"
+    currentAmount: Money!
+    
+    "Categoría de la meta"
+    category: GoalCategory!
+    
+    "Estado actual de la meta"
+    status: GoalStatus!
+    
+    """
+    🔥 CAMPO CALCULADO - NO ESTÁ EN BASE DE DATOS
+    
+    Se calcula en el resolver cada vez que se consulta:
+    ```java
+    private double calculateProgress(SavingsGoalEntity entity) {
+        if (entity.getTargetAmount().compareTo(BigDecimal.ZERO) == 0) {
+            return 0.0;
+        }
+        return entity.getCurrentAmount()
+            .divide(entity.getTargetAmount(), 4, RoundingMode.HALF_UP)
+            .multiply(BigDecimal.valueOf(100))
+            .doubleValue();
+    }
+    ```
+    
+    FÓRMULA: (currentAmount / targetAmount) × 100
+    RANGO: 0.0 a 100.0+ (puede exceder 100 si se deposita de más)
+    """
+    progressPercentage: Float!
+}
+
+"""
+Respuesta estructurada para mutations.
+
+🎓 SECCIÓN 4.5: MANEJO DE ERRORES
+
+En vez de lanzar excepciones GraphQL, usamos un patrón de respuesta
+estructurada que permite al cliente manejar errores de forma predecible.
+
+IMPLEMENTACIÓN JAVA: Map<String, Object> en SavingsGoalResolver
+```java
+@DgsMutation
+public Map<String, Object> createSavingsGoal(@InputArgument Map<String, Object> input) {
+    try {
+        SavingsGoalEntity saved = service.createGoal(entity);
+        
+        Map<String, Object> response = new HashMap<>();
+        response.put("success", true);
+        response.put("message", "Goal created successfully");
+        response.put("goal", toGraphQL(saved));
+        return response;
+        
+    } catch (Exception e) {
+        Map<String, Object> response = new HashMap<>();
+        response.put("success", false);
+        response.put("message", "Error: " + e.getMessage());
+        response.put("goal", null);
+        return response;
+    }
+}
+```
+
+💡 VENTAJAS DE ESTE PATRÓN:
+- El cliente siempre recibe HTTP 200
+- Puede distinguir errores de negocio vs errores técnicos
+- Fácil de procesar en el frontend
+"""
+type SavingsGoalResponse {
+    "¿La operación fue exitosa?"
+    success: Boolean!
+    
+    "Mensaje descriptivo (éxito o error)"
+    message: String!
+    
+    "Meta creada/actualizada (null si hubo error)"
+    goal: SavingsGoal
+}
+
+
+# ==============================================================================
+# INPUT TYPES
+# ==============================================================================
+
+"""
+Input para crear una nueva meta de ahorro.
+
+IMPLEMENTACIÓN JAVA: Map<String, Object> en SavingsGoalResolver
+```java
+@DgsMutation
+public Map<String, Object> createSavingsGoal(@InputArgument Map<String, Object> input) {
+    SavingsGoalEntity entity = SavingsGoalEntity.builder()
+        .userId(Long.parseLong(input.get("userId").toString()))
+        .name(input.get("name").toString())
+        .description(input.get("description") != null 
+                     ? input.get("description").toString() 
+                     : null)
+        .targetAmount(new BigDecimal(input.get("targetAmount").toString()))
+        .category(SavingsGoalEntity.GoalCategory.valueOf(
+                  input.get("category").toString()))
+        .build();
+    
+    SavingsGoalEntity saved = service.createGoal(entity);
+    // ...
+}
+```
+
+VALIDACIONES EN SERVICE:
+```java
+private void validateGoal(SavingsGoalEntity goal) {
+    if (goal.getName() == null || goal.getName().trim().isEmpty()) {
+        throw new IllegalArgumentException("Goal name is required");
+    }
+    if (goal.getTargetAmount() == null || 
+        goal.getTargetAmount().compareTo(BigDecimal.ZERO) <= 0) {
+        throw new IllegalArgumentException("Target amount must be positive");
+    }
+    if (goal.getUserId() == null) {
+        throw new IllegalArgumentException("User ID is required");
+    }
+    if (goal.getCategory() == null) {
+        throw new IllegalArgumentException("Category is required");
+    }
+}
+```
+"""
+input CreateSavingsGoalInput {
+    "ID del usuario que crea la meta"
+    userId: ID!
+    
+    "Nombre de la meta (ej: 'Vacaciones 2025')"
+    name: String!
+    
+    "Descripción opcional"
+    description: String
+    
+    "Monto objetivo (debe ser positivo)"
+    targetAmount: Float!
+    
+    "Categoría de la meta"
+    category: GoalCategory!
+}
+
+
+# ==============================================================================
+# QUERIES
+# ==============================================================================
+#
+# 🎓 SECCIÓN 4.1: INTEGRACIÓN JPA CON GRAPHQL
+#
+# IMPLEMENTACIÓN: resolver/SavingsGoalResolver.java
+# ```java
+# @DgsComponent
+# public class SavingsGoalResolver {
+#     private final SavingsGoalService service;
+#     
+#     @DgsQuery
+#     public Map<String, Object> savingsGoal(@InputArgument String id) {
+#         SavingsGoalEntity entity = service.getGoalById(Long.parseLong(id));
+#         return toGraphQL(entity);
+#     }
+# }
+# ```
+# ==============================================================================
 
 type Query {
-  savingsGoal(id: ID!): SavingsGoal
-  savingsGoals(userId: ID!): [SavingsGoal!]!
-  activeSavingsGoals(userId: ID!): [SavingsGoal!]!
+    
+    """
+    Obtener una meta de ahorro por ID.
+    
+    JAVA: SavingsGoalResolver.savingsGoal()
+    ```java
+    @DgsQuery
+    public Map<String, Object> savingsGoal(@InputArgument String id) {
+        SavingsGoalEntity entity = service.getGoalById(Long.parseLong(id));
+        return toGraphQL(entity);
+    }
+    ```
+    
+    SERVICE: SavingsGoalService.getGoalById()
+    ```java
+    public SavingsGoalEntity getGoalById(Long goalId) {
+        return repository.findById(goalId)
+            .orElseThrow(() -> new RuntimeException("Goal not found: " + goalId));
+    }
+    ```
+    
+    💡 EJEMPLO:
+    ```graphql
+    query {
+      savingsGoal(id: "1") {
+        name
+        targetAmount
+        currentAmount
+        progressPercentage
+        status
+      }
+    }
+    ```
+    """
+    savingsGoal(id: ID!): SavingsGoal
+    
+    """
+    Obtener todas las metas de un usuario.
+    
+    JAVA: SavingsGoalResolver.savingsGoals()
+    ```java
+    @DgsQuery
+    public List<Map<String, Object>> savingsGoals(@InputArgument String userId) {
+        return service.getGoalsByUserId(Long.parseLong(userId)).stream()
+            .map(this::toGraphQL)
+            .collect(Collectors.toList());
+    }
+    ```
+    
+    REPOSITORY: SavingsGoalRepository
+    ```java
+    public interface SavingsGoalRepository extends JpaRepository<SavingsGoalEntity, Long> {
+        List<SavingsGoalEntity> findByUserId(Long userId);
+    }
+    ```
+    
+    💡 EJEMPLO:
+    ```graphql
+    query {
+      savingsGoals(userId: "1") {
+        id
+        name
+        progressPercentage
+        status
+      }
+    }
+    ```
+    """
+    savingsGoals(userId: ID!): [SavingsGoal!]!
+    
+    """
+    Obtener solo las metas ACTIVAS de un usuario.
+    
+    JAVA: SavingsGoalResolver.activeSavingsGoals()
+    ```java
+    @DgsQuery
+    public List<Map<String, Object>> activeSavingsGoals(@InputArgument String userId) {
+        return service.getActiveGoalsByUserId(Long.parseLong(userId)).stream()
+            .map(this::toGraphQL)
+            .collect(Collectors.toList());
+    }
+    ```
+    
+    REPOSITORY: Query method derivado
+    ```java
+    List<SavingsGoalEntity> findByUserIdAndStatus(Long userId, GoalStatus status);
+    ```
+    
+    SERVICE:
+    ```java
+    public List<SavingsGoalEntity> getActiveGoalsByUserId(Long userId) {
+        return repository.findByUserIdAndStatus(userId, GoalStatus.ACTIVE);
+    }
+    ```
+    
+    💡 EJEMPLO:
+    ```graphql
+    query {
+      activeSavingsGoals(userId: "1") {
+        name
+        progressPercentage
+      }
+    }
+    ```
+    """
+    activeSavingsGoals(userId: ID!): [SavingsGoal!]!
 }
+
+
+# ==============================================================================
+# MUTATIONS
+# ==============================================================================
+#
+# 🎓 SECCIÓN 4.3: TRANSACCIONES EN MUTATIONS
+#
+# Las mutations que modifican datos usan @Transactional para garantizar
+# atomicidad. Si algo falla, se hace ROLLBACK automático.
+#
+# ```java
+# @Service
+# public class SavingsGoalService {
+#     
+#     @Transactional
+#     public SavingsGoalEntity createGoal(SavingsGoalEntity goal) {
+#         validateGoal(goal);
+#         goal.setStatus(GoalStatus.ACTIVE);
+#         goal.setCurrentAmount(BigDecimal.ZERO);
+#         return repository.save(goal);
+#     }
+# }
+# ```
+# ==============================================================================
 
 type Mutation {
-  createSavingsGoal(input: CreateSavingsGoalInput!): SavingsGoalResponse!
+    
+    """
+    Crear una nueva meta de ahorro.
+    
+    🎓 SECCIÓN 4.3 + 4.5: TRANSACCIONES Y MANEJO DE ERRORES
+    
+    JAVA: SavingsGoalResolver.createSavingsGoal()
+    ```java
+    @DgsMutation
+    public Map<String, Object> createSavingsGoal(@InputArgument Map<String, Object> input) {
+        try {
+            SavingsGoalEntity entity = SavingsGoalEntity.builder()
+                .userId(Long.parseLong(input.get("userId").toString()))
+                .name(input.get("name").toString())
+                .description(input.get("description") != null 
+                             ? input.get("description").toString() : null)
+                .targetAmount(new BigDecimal(input.get("targetAmount").toString()))
+                .category(GoalCategory.valueOf(input.get("category").toString()))
+                .build();
+            
+            SavingsGoalEntity saved = service.createGoal(entity);
+            
+            return Map.of(
+                "success", true,
+                "message", "Goal created successfully",
+                "goal", toGraphQL(saved)
+            );
+            
+        } catch (Exception e) {
+            return Map.of(
+                "success", false,
+                "message", "Error: " + e.getMessage(),
+                "goal", null
+            );
+        }
+    }
+    ```
+    
+    SERVICE CON @TRANSACTIONAL:
+    ```java
+    @Transactional
+    public SavingsGoalEntity createGoal(SavingsGoalEntity goal) {
+        validateGoal(goal);
+        goal.setStatus(GoalStatus.ACTIVE);
+        if (goal.getCurrentAmount() == null) {
+            goal.setCurrentAmount(BigDecimal.ZERO);
+        }
+        return repository.save(goal);
+    }
+    ```
+    
+    💡 EJEMPLO:
+    ```graphql
+    mutation {
+      createSavingsGoal(input: {
+        userId: "1"
+        name: "Vacaciones 2025"
+        description: "Viaje a Europa"
+        targetAmount: 5000.00
+        category: VACATION
+      }) {
+        success
+        message
+        goal {
+          id
+          name
+          progressPercentage
+        }
+      }
+    }
+    ```
+    
+    RESPUESTA EXITOSA:
+    ```json
+    {
+      "data": {
+        "createSavingsGoal": {
+          "success": true,
+          "message": "Goal created successfully",
+          "goal": {
+            "id": "5",
+            "name": "Vacaciones 2025",
+            "progressPercentage": 0.0
+          }
+        }
+      }
+    }
+    ```
+    
+    RESPUESTA CON ERROR:
+    ```json
+    {
+      "data": {
+        "createSavingsGoal": {
+          "success": false,
+          "message": "Error: Target amount must be positive",
+          "goal": null
+        }
+      }
+    }
+    ```
+    """
+    createSavingsGoal(input: CreateSavingsGoalInput!): SavingsGoalResponse!
 }
 
-input CreateSavingsGoalInput {
-  userId: ID!
-  name: String!
-  description: String
-  targetAmount: Float!
-  category: GoalCategory!
-}
 
-type SavingsGoalResponse {
-  success: Boolean!
-  message: String!
-  goal: SavingsGoal
-}
+# ==============================================================================
+# OPERACIONES ADICIONALES EN SERVICE (NO EXPUESTAS EN GRAPHQL AÚN)
+# ==============================================================================
+#
+# El SavingsGoalService tiene más operaciones que podrían exponerse:
+#
+# 🔹 DEPOSIT (depositar dinero en una meta):
+# ```java
+# @Transactional
+# public SavingsGoalEntity deposit(Long goalId, BigDecimal amount) {
+#     if (amount.compareTo(BigDecimal.ZERO) <= 0) {
+#         throw new IllegalArgumentException("Deposit amount must be positive");
+#     }
+#     
+#     SavingsGoalEntity goal = getGoalById(goalId);
+#     
+#     if (goal.getStatus() != GoalStatus.ACTIVE) {
+#         throw new IllegalStateException("Cannot deposit to a " + goal.getStatus() + " goal");
+#     }
+#     
+#     goal.setCurrentAmount(goal.getCurrentAmount().add(amount));
+#     
+#     // Auto-completar si se alcanza la meta
+#     if (goal.isCompleted()) {
+#         goal.setStatus(GoalStatus.COMPLETED);
+#     }
+#     
+#     return repository.save(goal);
+# }
+# ```
+#
+# 🔹 WITHDRAW (retirar dinero de una meta):
+# ```java
+# @Transactional
+# public SavingsGoalEntity withdraw(Long goalId, BigDecimal amount) {
+#     SavingsGoalEntity goal = getGoalById(goalId);
+#     
+#     if (goal.getCurrentAmount().compareTo(amount) < 0) {
+#         throw new IllegalStateException("Insufficient balance");
+#     }
+#     
+#     goal.setCurrentAmount(goal.getCurrentAmount().subtract(amount));
+#     return repository.save(goal);
+# }
+# ```
+#
+# 🔹 UPDATE STATUS (pausar, cancelar, etc.):
+# ```java
+# @Transactional
+# public SavingsGoalEntity updateStatus(Long goalId, GoalStatus newStatus) {
+#     SavingsGoalEntity goal = getGoalById(goalId);
+#     goal.setStatus(newStatus);
+#     return repository.save(goal);
+# }
+# ```
+#
+# 💡 EJERCICIO PARA EL ALUMNO:
+# Exponer estas operaciones como Mutations GraphQL adicionales.
+#
+# ==============================================================================
+
+
+# ==============================================================================
+# RESUMEN: ARCHIVOS JAVA DEL CAPÍTULO 4
+# ==============================================================================
+#
+# 📦 MODEL (model/):
+# └── SavingsGoalEntity.java       → @Entity JPA con GoalStatus y GoalCategory
+#
+# 📦 REPOSITORY (repository/):
+# └── SavingsGoalRepository.java   → JpaRepository<SavingsGoalEntity, Long>
+#                                    findByUserId(), findByUserIdAndStatus()
+#
+# 📦 SERVICE (service/):
+# └── SavingsGoalService.java      → Lógica de negocio + @Transactional
+#                                    getGoalById(), createGoal(), deposit(), etc.
+#
+# 📦 RESOLVER (resolver/):
+# └── SavingsGoalResolver.java     → @DgsComponent con @DgsQuery y @DgsMutation
+#                                    Transforma Entity → Map para GraphQL
+#
+# 📦 SCALAR (scalar/):
+# └── MoneyScalar.java             → @DgsScalar para BigDecimal ↔ Money
+#
+# 📦 RESOURCES:
+# ├── schema/savings-schema.graphqls  ← Este archivo
+# ├── application.yml                 ← Config PostgreSQL + DGS
+# └── data.sql                        ← Datos iniciales
+#
+# 📦 DOCKER:
+# └── docker-compose.yml           → PostgreSQL containerizado
+#
+# ==============================================================================
+#
+# 🎯 ANOTACIONES CLAVE DEL CAPÍTULO:
+#
+# JPA:
+# @Entity           → Marca clase como entidad persistente
+# @Table            → Nombre de la tabla en BD
+# @Id               → Campo de clave primaria
+# @GeneratedValue   → Auto-generación de ID
+# @Column           → Configuración de columna
+# @Enumerated       → Cómo persistir enums (STRING recomendado)
+#
+# SPRING:
+# @Service          → Componente de lógica de negocio
+# @Transactional    → Operación atómica (rollback si falla)
+# @Repository       → Componente de acceso a datos
+#
+# DGS:
+# @DgsComponent     → Componente DGS (resolver)
+# @DgsQuery         → Método resuelve una Query
+# @DgsMutation      → Método resuelve una Mutation
+# @DgsScalar        → Scalar personalizado
+# @InputArgument    → Inyecta argumento de la query/mutation
+#
+# ==============================================================================

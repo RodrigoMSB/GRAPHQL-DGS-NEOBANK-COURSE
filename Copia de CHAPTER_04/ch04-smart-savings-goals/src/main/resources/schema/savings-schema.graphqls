@@ -1,0 +1,839 @@
+# ==============================================================================
+# CAPÍTULO 1: INVESTMENT PORTFOLIO TRACKER - SCHEMA GRAPHQL
+# ==============================================================================
+#
+# 🎯 PROPÓSITO DE ESTE ARCHIVO:
+# Este archivo es el CONTRATO de tu API GraphQL. Define:
+# - QUÉ datos existen (Types)
+# - QUÉ valores están permitidos (Enums)
+# - QUÉ puede enviar el cliente (Inputs)
+# - QUÉ puede LEER el cliente (Queries)
+# - QUÉ puede MODIFICAR el cliente (Mutations)
+#
+# 📚 SECCIONES DEL CAPÍTULO QUE CUBRE:
+# 1.1 - Comparación REST vs GraphQL
+# 1.2 - Componentes base: Schema, Types, Queries, Mutations, Resolvers
+# 1.3 - Consultas anidadas y variables
+# 1.4 - Filtros, orden y paginación
+# 1.5 - Tipado, nullabilidad y seguridad
+#
+# ==============================================================================
+# MAPEO COMPLETO: SCHEMA GRAPHQL ↔ CLASES JAVA
+# ==============================================================================
+#
+# ┌────────────────────────────────────────────────────────────────────────────┐
+# │  SCHEMA GRAPHQL              │  IMPLEMENTACIÓN JAVA                       │
+# ├────────────────────────────────────────────────────────────────────────────┤
+# │  enum AssetType              │  AssetType.java (enum)                     │
+# │  enum AssetSortField         │  String en AssetQueryResolver              │
+# │  enum SortDirection          │  String en AssetQueryResolver              │
+# ├────────────────────────────────────────────────────────────────────────────┤
+# │  type Portfolio              │  Portfolio.java (model)                    │
+# │  type Asset                  │  Asset.java (model)                        │
+# │  type Performance            │  Performance.java (model)                  │
+# ├────────────────────────────────────────────────────────────────────────────┤
+# │  type AssetConnection        │  AssetQueryResolver.AssetConnection (DTO)  │
+# │  type AssetEdge              │  AssetQueryResolver.AssetEdge (DTO)        │
+# │  type PageInfo               │  AssetQueryResolver.PageInfo (DTO)         │
+# ├────────────────────────────────────────────────────────────────────────────┤
+# │  type MutationResponse       │  PortfolioMutationResolver.MutationResponse│
+# │  type CreatePortfolioResponse│  PortfolioMutationResolver.CreatePortfolio │
+# │  type AddAssetResponse       │  PortfolioMutationResolver.AddAssetResponse│
+# ├────────────────────────────────────────────────────────────────────────────┤
+# │  input AssetFilterInput      │  Map<String, Object> en AssetQueryResolver │
+# │  input AssetSortInput        │  Map<String, Object> en AssetQueryResolver │
+# │  input PaginationInput       │  Map<String, Object> en AssetQueryResolver │
+# │  input CreatePortfolioInput  │  Map<String, Object> en MutationResolver   │
+# │  input AddAssetInput         │  Map<String, Object> en MutationResolver   │
+# ├────────────────────────────────────────────────────────────────────────────┤
+# │  Query.myPortfolios          │  PortfolioQueryResolver.myPortfolios()     │
+# │  Query.portfolio             │  PortfolioQueryResolver.portfolio()        │
+# │  Query.portfolioPerformance  │  PortfolioQueryResolver.portfolioPerform() │
+# │  Query.searchAsset           │  PortfolioQueryResolver.searchAsset()      │
+# │  Query.assets                │  AssetQueryResolver.assets()               │
+# ├────────────────────────────────────────────────────────────────────────────┤
+# │  Mutation.createPortfolio    │  PortfolioMutationResolver.createPortfolio │
+# │  Mutation.addAsset           │  PortfolioMutationResolver.addAsset()      │
+# │  Mutation.removeAsset        │  PortfolioMutationResolver.removeAsset()   │
+# └────────────────────────────────────────────────────────────────────────────┘
+#
+# ==============================================================================
+
+
+# ==============================================================================
+# 1. ENUMS - Valores Permitidos
+# ==============================================================================
+
+"""
+Tipos de activos financieros soportados.
+
+🎓 Sección 1.2: Demuestra el uso de Enums en GraphQL
+🎓 Sección 1.5: Validación automática - solo acepta estos valores
+
+IMPLEMENTACIÓN JAVA: AssetType.java
+```java
+public enum AssetType {
+    STOCK,      // Acciones
+    CRYPTO,     // Criptomonedas
+    ETF,        // Fondos cotizados
+    BOND,       // Bonos
+    COMMODITY   // Materias primas
+}
+```
+
+💡 EJEMPLO DE USO EN QUERY:
+```graphql
+query {
+  assets(portfolioId: "001", filter: { assetType: STOCK }) {
+    edges { node { symbol } }
+  }
+}
+```
+"""
+enum AssetType {
+  "Acciones de empresas (Apple, Google, etc.)"
+  STOCK
+  
+  "Criptomonedas (Bitcoin, Ethereum, etc.)"
+  CRYPTO
+  
+  "Fondos cotizados - Exchange Traded Funds"
+  ETF
+  
+  "Bonos gubernamentales o corporativos"
+  BOND
+  
+  "Materias primas (oro, plata, petróleo)"
+  COMMODITY
+}
+
+"""
+Campos disponibles para ordenar activos.
+
+🎓 Sección 1.4: Se usa junto con SortDirection para ordenar resultados.
+
+IMPLEMENTACIÓN JAVA: AssetQueryResolver.applySorting()
+```java
+switch (field) {
+    case "SYMBOL":
+        comparator = Comparator.comparing(Asset::getSymbol);
+        break;
+    case "TOTAL_VALUE":
+        comparator = Comparator.comparing(Asset::getTotalValue);
+        break;
+    case "PROFIT_LOSS_PERCENT":
+        comparator = Comparator.comparing(Asset::getProfitLossPercent);
+        break;
+    case "QUANTITY":
+        comparator = Comparator.comparing(Asset::getQuantity);
+        break;
+}
+```
+"""
+enum AssetSortField {
+  "Ordenar por símbolo (alfabético)"
+  SYMBOL
+  
+  "Ordenar por valor total"
+  TOTAL_VALUE
+  
+  "Ordenar por ganancia/pérdida porcentual"
+  PROFIT_LOSS_PERCENT
+  
+  "Ordenar por cantidad de unidades"
+  QUANTITY
+}
+
+"""
+Dirección del ordenamiento.
+
+IMPLEMENTACIÓN JAVA: AssetQueryResolver.applySorting()
+```java
+if ("DESC".equals(direction)) {
+    comparator = comparator.reversed();
+}
+```
+"""
+enum SortDirection {
+  "Ascendente (A-Z, 0-9, menor a mayor)"
+  ASC
+  
+  "Descendente (Z-A, 9-0, mayor a menor)"
+  DESC
+}
+
+
+# ==============================================================================
+# 2. TYPES - Estructura de Datos (lo que RETORNA el servidor)
+# ==============================================================================
+
+"""
+Representa un portfolio de inversión de un cliente.
+
+🎓 Sección 1.2: Define la estructura de datos principal
+🎓 Sección 1.3: Permite consultas anidadas (assets, performance)
+
+IMPLEMENTACIÓN JAVA: Portfolio.java
+```java
+public class Portfolio {
+    private String id;
+    private String name;
+    private String ownerId;
+    private String ownerName;
+    private Double totalValue;
+    private LocalDateTime createdAt;
+    private List<Asset> assets;      // Relación anidada
+    private Performance performance; // Relación anidada
+}
+```
+
+RESOLVER: PortfolioQueryResolver.java
+```java
+@QueryMapping
+public Portfolio portfolio(@Argument String id) {
+    return dataService.getPortfolioById(id);
+}
+```
+
+💡 EJEMPLO DE CONSULTA ANIDADA:
+```graphql
+query {
+  portfolio(id: "portfolio-001") {
+    name
+    totalValue
+    assets {        ← Spring GraphQL llama portfolio.getAssets()
+      symbol
+      currentPrice
+    }
+    performance {   ← Spring GraphQL llama portfolio.getPerformance()
+      totalReturn
+    }
+  }
+}
+```
+"""
+type Portfolio {
+  "ID único del portfolio - NUNCA es null"
+  id: ID!
+  
+  "Nombre descriptivo del portfolio (ej: 'Retirement Fund')"
+  name: String!
+  
+  "ID del usuario propietario"
+  ownerId: String!
+  
+  "Nombre del usuario propietario"
+  ownerName: String!
+  
+  "Valor total actual del portfolio en USD"
+  totalValue: Float!
+  
+  "Fecha y hora de creación (formato ISO 8601)"
+  createdAt: String!
+  
+  """
+  Lista de activos en el portfolio.
+  JAVA: portfolio.getAssets() retorna List<Asset>
+  """
+  assets: [Asset!]!
+  
+  """
+  Rendimiento histórico del portfolio.
+  JAVA: portfolio.getPerformance() puede retornar null
+  """
+  performance: Performance
+}
+
+"""
+Representa un activo financiero dentro de un portfolio.
+
+IMPLEMENTACIÓN JAVA: Asset.java
+```java
+public class Asset {
+    private String id;
+    private String symbol;
+    private String name;
+    private AssetType assetType;
+    private Double quantity;
+    private Double averageBuyPrice;
+    private Double currentPrice;
+    private LocalDateTime lastUpdated;
+    
+    // CAMPOS CALCULADOS (no están en BD):
+    public Double getTotalValue() {
+        return quantity * currentPrice;
+    }
+    
+    public Double getProfitLossPercent() {
+        return ((currentPrice - averageBuyPrice) / averageBuyPrice) * 100;
+    }
+}
+```
+
+MAPEO CAMPO POR CAMPO:
+┌─────────────────────┬─────────────────────────────────────┐
+│ Campo GraphQL       │ Getter Java                         │
+├─────────────────────┼─────────────────────────────────────┤
+│ id                  │ asset.getId()                       │
+│ symbol              │ asset.getSymbol()                   │
+│ name                │ asset.getName()                     │
+│ assetType           │ asset.getAssetType()                │
+│ quantity            │ asset.getQuantity()                 │
+│ averageBuyPrice     │ asset.getAverageBuyPrice()          │
+│ currentPrice        │ asset.getCurrentPrice()             │
+│ totalValue          │ asset.getTotalValue() [CALCULADO]   │
+│ profitLossPercent   │ asset.getProfitLossPercent() [CALC] │
+│ lastUpdated         │ asset.getLastUpdated().toString()   │
+└─────────────────────┴─────────────────────────────────────┘
+"""
+type Asset {
+  id: ID!
+  symbol: String!
+  name: String!
+  assetType: AssetType!
+  quantity: Float!
+  averageBuyPrice: Float!
+  currentPrice: Float!
+  
+  """
+  Valor total = quantity × currentPrice
+  JAVA: getTotalValue() es un método CALCULADO
+  """
+  totalValue: Float!
+  
+  """
+  Ganancia o pérdida en porcentaje.
+  JAVA: getProfitLossPercent() es un método CALCULADO
+  """
+  profitLossPercent: Float!
+  
+  lastUpdated: String!
+}
+
+"""
+Representa el rendimiento histórico de un portfolio.
+
+IMPLEMENTACIÓN JAVA: Performance.java
+```java
+public class Performance {
+    private Double totalReturn;
+    private Double yearReturn;
+    private Double monthReturn;
+    private Double weekReturn;
+    private Asset bestPerformer;   // Relación anidada
+    private Asset worstPerformer;  // Relación anidada
+}
+```
+"""
+type Performance {
+  totalReturn: Float!
+  yearReturn: Float!
+  monthReturn: Float!
+  weekReturn: Float!
+  bestPerformer: Asset
+  worstPerformer: Asset
+}
+
+
+# ==============================================================================
+# 2.2 TYPES DE PAGINACIÓN (Patrón Relay/Connection)
+# ==============================================================================
+
+"""
+Respuesta paginada de activos (Patrón Relay Connection).
+
+🎓 Sección 1.4: Estructura estándar para paginación
+
+IMPLEMENTACIÓN JAVA: AssetQueryResolver.AssetConnection
+```java
+public static class AssetConnection {
+    private List<AssetEdge> edges;
+    private PageInfo pageInfo;
+    private Integer totalCount;
+}
+```
+
+RESOLVER: AssetQueryResolver.applyPagination()
+```java
+private AssetConnection applyPagination(List<Asset> assets, Map<String, Object> pagination) {
+    // 1. Encontrar índice de inicio desde cursor
+    // 2. Calcular sublista según limit
+    // 3. Crear edges con cursors
+    // 4. Crear pageInfo con metadatos
+    return new AssetConnection(edges, pageInfo, assets.size());
+}
+```
+"""
+type AssetConnection {
+  edges: [AssetEdge!]!
+  pageInfo: PageInfo!
+  totalCount: Int
+}
+
+"""
+Envuelve un Asset con su cursor de paginación.
+
+IMPLEMENTACIÓN JAVA: AssetQueryResolver.AssetEdge
+```java
+public static class AssetEdge {
+    private Asset node;
+    private String cursor; // Base64 del ID
+}
+```
+"""
+type AssetEdge {
+  node: Asset!
+  
+  """
+  Cursor único para este elemento.
+  JAVA: Base64.getEncoder().encodeToString(id.getBytes())
+  """
+  cursor: String!
+}
+
+"""
+Metadatos de paginación.
+
+IMPLEMENTACIÓN JAVA: AssetQueryResolver.PageInfo
+```java
+public static class PageInfo {
+    private Boolean hasNextPage;
+    private Boolean hasPreviousPage;
+    private String startCursor;
+    private String endCursor;
+}
+```
+"""
+type PageInfo {
+  hasNextPage: Boolean!
+  hasPreviousPage: Boolean!
+  startCursor: String
+  endCursor: String
+}
+
+
+# ==============================================================================
+# 2.3 TYPES DE RESPUESTA (Para Mutations)
+# ==============================================================================
+
+"""
+Respuesta genérica para mutations.
+
+IMPLEMENTACIÓN JAVA: PortfolioMutationResolver.MutationResponse
+```java
+public static class MutationResponse {
+    private Boolean success;
+    private String message;
+    private String code;
+    
+    public static Builder builder() { return new Builder(); }
+}
+```
+"""
+type MutationResponse {
+  success: Boolean!
+  message: String!
+  code: String
+}
+
+"""
+Respuesta para createPortfolio mutation.
+
+IMPLEMENTACIÓN JAVA: PortfolioMutationResolver.CreatePortfolioResponse
+```java
+public static class CreatePortfolioResponse {
+    private Boolean success;
+    private String message;
+    private Portfolio portfolio;
+}
+```
+"""
+type CreatePortfolioResponse {
+  success: Boolean!
+  message: String!
+  portfolio: Portfolio
+}
+
+"""
+Respuesta para addAsset mutation.
+
+IMPLEMENTACIÓN JAVA: PortfolioMutationResolver.AddAssetResponse
+```java
+public static class AddAssetResponse {
+    private Boolean success;
+    private String message;
+    private Asset asset;
+}
+```
+"""
+type AddAssetResponse {
+  success: Boolean!
+  message: String!
+  asset: Asset
+}
+
+
+# ==============================================================================
+# 3. INPUTS - Datos que ENVÍA el cliente
+# ==============================================================================
+
+"""
+Filtros para buscar activos.
+
+🎓 Sección 1.4: Todos los campos son opcionales y acumulativos (AND)
+
+IMPLEMENTACIÓN JAVA: AssetQueryResolver.applyFilters()
+```java
+private List<Asset> applyFilters(List<Asset> assets, Map<String, Object> filter) {
+    return assets.stream()
+        .filter(asset -> {
+            if (filter.containsKey("assetType")) {
+                AssetType filterType = AssetType.valueOf((String) filter.get("assetType"));
+                if (!asset.getAssetType().equals(filterType)) return false;
+            }
+            if (filter.containsKey("minValue")) {
+                Double minValue = ((Number) filter.get("minValue")).doubleValue();
+                if (asset.getTotalValue() < minValue) return false;
+            }
+            // ... más filtros
+            return true;
+        })
+        .collect(Collectors.toList());
+}
+```
+"""
+input AssetFilterInput {
+  assetType: AssetType
+  minValue: Float
+  maxValue: Float
+  symbolContains: String
+}
+
+"""
+Ordenamiento de activos.
+
+IMPLEMENTACIÓN JAVA: AssetQueryResolver.applySorting()
+```java
+private List<Asset> applySorting(List<Asset> assets, Map<String, Object> sort) {
+    String field = (String) sort.get("field");
+    String direction = (String) sort.get("direction");
+    
+    Comparator<Asset> comparator = switch (field) {
+        case "SYMBOL" -> Comparator.comparing(Asset::getSymbol);
+        case "TOTAL_VALUE" -> Comparator.comparing(Asset::getTotalValue);
+        // ...
+    };
+    
+    if ("DESC".equals(direction)) {
+        comparator = comparator.reversed();
+    }
+    
+    return assets.stream().sorted(comparator).toList();
+}
+```
+"""
+input AssetSortInput {
+  field: AssetSortField!
+  direction: SortDirection!
+}
+
+"""
+Parámetros de paginación cursor-based.
+
+IMPLEMENTACIÓN JAVA: AssetQueryResolver.applyPagination()
+```java
+int limit = 10;  // Default
+String afterCursor = null;
+
+if (pagination != null) {
+    if (pagination.containsKey("limit")) {
+        limit = ((Number) pagination.get("limit")).intValue();
+    }
+    if (pagination.containsKey("after")) {
+        afterCursor = (String) pagination.get("after");
+    }
+}
+```
+"""
+input PaginationInput {
+  limit: Int
+  after: String
+  before: String
+}
+
+"""
+Input para crear un portfolio.
+
+IMPLEMENTACIÓN JAVA: PortfolioMutationResolver.createPortfolio()
+```java
+@MutationMapping
+public CreatePortfolioResponse createPortfolio(@Argument Map<String, Object> input) {
+    String name = (String) input.get("name");
+    Portfolio portfolio = dataService.createPortfolio(name, userId, userName);
+    return CreatePortfolioResponse.builder()
+        .success(true)
+        .message("Portfolio created successfully")
+        .portfolio(portfolio)
+        .build();
+}
+```
+"""
+input CreatePortfolioInput {
+  name: String!
+}
+
+"""
+Input para añadir un activo a un portfolio.
+
+IMPLEMENTACIÓN JAVA: PortfolioMutationResolver.addAsset()
+```java
+@MutationMapping
+public AddAssetResponse addAsset(@Argument Map<String, Object> input) {
+    String portfolioId = (String) input.get("portfolioId");
+    String symbol = (String) input.get("symbol");
+    AssetType assetType = AssetType.valueOf((String) input.get("assetType"));
+    Double quantity = ((Number) input.get("quantity")).doubleValue();
+    Double buyPrice = ((Number) input.get("buyPrice")).doubleValue();
+    
+    Asset asset = dataService.addAssetToPortfolio(
+        portfolioId, symbol, assetName, assetType, quantity, buyPrice
+    );
+    
+    return AddAssetResponse.builder()
+        .success(true)
+        .asset(asset)
+        .build();
+}
+```
+"""
+input AddAssetInput {
+  portfolioId: ID!
+  symbol: String!
+  assetType: AssetType!
+  quantity: Float!
+  buyPrice: Float!
+}
+
+
+# ==============================================================================
+# 4. QUERIES - Operaciones de LECTURA
+# ==============================================================================
+
+type Query {
+  
+  """
+  Obtiene todos los portfolios del usuario autenticado.
+  
+  IMPLEMENTACIÓN JAVA: PortfolioQueryResolver.myPortfolios()
+```java
+  @QueryMapping
+  public List<Portfolio> myPortfolios() {
+      String userId = "user-001"; // En producción: del SecurityContext
+      return dataService.getPortfoliosByOwnerId(userId);
+  }
+```
+  """
+  myPortfolios: [Portfolio!]!
+  
+  """
+  Obtiene un portfolio específico por su ID.
+  
+  IMPLEMENTACIÓN JAVA: PortfolioQueryResolver.portfolio()
+```java
+  @QueryMapping
+  public Portfolio portfolio(@Argument String id) {
+      return dataService.getPortfolioById(id);
+  }
+```
+  
+  💡 EJEMPLO:
+```graphql
+  query GetPortfolio($id: ID!) {
+    portfolio(id: $id) {
+      name
+      assets { symbol }
+    }
+  }
+  # Variables: { "id": "portfolio-001" }
+```
+  """
+  portfolio(id: ID!): Portfolio
+  
+  """
+  Obtiene el rendimiento de un portfolio.
+  
+  IMPLEMENTACIÓN JAVA: PortfolioQueryResolver.portfolioPerformance()
+```java
+  @QueryMapping
+  public Performance portfolioPerformance(@Argument String portfolioId) {
+      return dataService.getPerformance(portfolioId);
+  }
+```
+  """
+  portfolioPerformance(portfolioId: ID!): Performance
+  
+  """
+  Obtiene activos con filtros, orden y paginación.
+  
+  🎓 Sección 1.4: Query más compleja del capítulo
+  
+  IMPLEMENTACIÓN JAVA: AssetQueryResolver.assets()
+```java
+  @QueryMapping
+  public AssetConnection assets(
+          @Argument String portfolioId,
+          @Argument Map<String, Object> filter,
+          @Argument Map<String, Object> sort,
+          @Argument Map<String, Object> pagination) {
+      
+      List<Asset> allAssets = dataService.getAssetsByPortfolioId(portfolioId);
+      List<Asset> filteredAssets = applyFilters(allAssets, filter);
+      List<Asset> sortedAssets = applySorting(filteredAssets, sort);
+      
+      return applyPagination(sortedAssets, pagination);
+  }
+```
+  
+  💡 EJEMPLO COMPLETO:
+```graphql
+  query {
+    assets(
+      portfolioId: "portfolio-001"
+      filter: { assetType: STOCK, minValue: 1000 }
+      sort: { field: TOTAL_VALUE, direction: DESC }
+      pagination: { limit: 5 }
+    ) {
+      totalCount
+      edges {
+        cursor
+        node { symbol totalValue }
+      }
+      pageInfo { hasNextPage endCursor }
+    }
+  }
+```
+  """
+  assets(
+    portfolioId: ID!
+    filter: AssetFilterInput
+    sort: AssetSortInput
+    pagination: PaginationInput
+  ): AssetConnection!
+  
+  """
+  Busca un activo por su símbolo.
+  
+  IMPLEMENTACIÓN JAVA: PortfolioQueryResolver.searchAsset()
+```java
+  @QueryMapping
+  public Asset searchAsset(@Argument String symbol) {
+      return dataService.getAssetBySymbol(symbol);
+  }
+```
+  """
+  searchAsset(symbol: String!): Asset
+}
+
+
+# ==============================================================================
+# 5. MUTATIONS - Operaciones de ESCRITURA
+# ==============================================================================
+
+type Mutation {
+  
+  """
+  Crea un nuevo portfolio.
+  
+  IMPLEMENTACIÓN JAVA: PortfolioMutationResolver.createPortfolio()
+```java
+  @MutationMapping
+  public CreatePortfolioResponse createPortfolio(@Argument Map<String, Object> input) {
+      String name = (String) input.get("name");
+      Portfolio portfolio = dataService.createPortfolio(name, userId, userName);
+      
+      return CreatePortfolioResponse.builder()
+          .success(true)
+          .message("Portfolio created successfully")
+          .portfolio(portfolio)
+          .build();
+  }
+```
+  
+  💡 EJEMPLO:
+```graphql
+  mutation {
+    createPortfolio(input: { name: "Growth Portfolio 2024" }) {
+      success
+      portfolio { id name }
+    }
+  }
+```
+  """
+  createPortfolio(input: CreatePortfolioInput!): CreatePortfolioResponse!
+  
+  """
+  Añade un activo a un portfolio.
+  
+  IMPLEMENTACIÓN JAVA: PortfolioMutationResolver.addAsset()
+```java
+  @MutationMapping
+  public AddAssetResponse addAsset(@Argument Map<String, Object> input) {
+      // Extraer datos del input Map
+      Asset asset = dataService.addAssetToPortfolio(...);
+      
+      return AddAssetResponse.builder()
+          .success(true)
+          .asset(asset)
+          .build();
+  }
+```
+  """
+  addAsset(input: AddAssetInput!): AddAssetResponse!
+  
+  """
+  Elimina un activo de un portfolio.
+  
+  IMPLEMENTACIÓN JAVA: PortfolioMutationResolver.removeAsset()
+```java
+  @MutationMapping
+  public MutationResponse removeAsset(
+          @Argument String portfolioId,
+          @Argument String assetId) {
+      
+      boolean removed = dataService.removeAsset(portfolioId, assetId);
+      
+      return MutationResponse.builder()
+          .success(removed)
+          .message(removed ? "Asset removed" : "Asset not found")
+          .code(removed ? "ASSET_REMOVED" : "ASSET_NOT_FOUND")
+          .build();
+  }
+```
+  """
+  removeAsset(portfolioId: ID!, assetId: ID!): MutationResponse!
+}
+
+
+# ==============================================================================
+# RESUMEN: ARCHIVOS JAVA INVOLUCRADOS
+# ==============================================================================
+#
+# ┌─────────────────────────────────────────────────────────────────────────────┐
+# │  ARCHIVO                            │  PROPÓSITO                           │
+# ├─────────────────────────────────────────────────────────────────────────────┤
+# │  model/Portfolio.java               │  Entidad Portfolio                   │
+# │  model/Asset.java                   │  Entidad Asset + campos calculados   │
+# │  model/Performance.java             │  Entidad Performance                 │
+# │  model/AssetType.java               │  Enum de tipos de activo             │
+# ├─────────────────────────────────────────────────────────────────────────────┤
+# │  graphql/PortfolioQueryResolver.java│  Queries: myPortfolios, portfolio,   │
+# │                                     │  searchAsset, portfolioPerformance   │
+# │  graphql/AssetQueryResolver.java    │  Query: assets (con paginación)      │
+# │                                     │  + DTOs: AssetConnection, AssetEdge  │
+# │  graphql/PortfolioMutationResolver  │  Mutations: createPortfolio,         │
+# │                                     │  addAsset, removeAsset + Response DTOs│
+# ├─────────────────────────────────────────────────────────────────────────────┤
+# │  data/MockDataService.java          │  Servicio de datos (in-memory)       │
+# └─────────────────────────────────────────────────────────────────────────────┘
+#
+# ==============================================================================

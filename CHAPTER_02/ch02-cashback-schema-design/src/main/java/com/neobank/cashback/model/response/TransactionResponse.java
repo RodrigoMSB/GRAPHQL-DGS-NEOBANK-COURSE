@@ -2,9 +2,59 @@ package com.neobank.cashback.model.response;
 
 import com.neobank.cashback.model.Transaction;
 
+/**
+ * Respuesta estructurada para mutations de Transaction.
+ * 
+ * 🎓 SECCIÓN 2.2: RESPONSE TYPES
+ * 
+ * ¿POR QUÉ UN RESPONSE TYPE?
+ * 
+ * En vez de retornar directamente Transaction (que podría ser null en error),
+ * usamos un objeto estructurado que SIEMPRE tiene:
+ * - success: Si la operación funcionó
+ * - message: Explicación para el usuario
+ * - transaction: Los datos (solo si success=true)
+ * 
+ * 💡 VENTAJAS:
+ * 1. El cliente siempre recibe una respuesta consistente
+ * 2. Los errores de negocio NO son excepciones GraphQL
+ * 3. Fácil de manejar en el frontend
+ * 4. El mismo patrón para todas las mutations
+ * 
+ * 💡 EJEMPLO EN GRAPHQL:
+ * ```graphql
+ * mutation {
+ *   createTransaction(input: {...}) {
+ *     success       # Siempre presente
+ *     message       # Siempre presente
+ *     transaction { # Presente solo si success=true
+ *       id
+ *       amount
+ *     }
+ *   }
+ * }
+ * ```
+ * 
+ * 💡 MANEJO EN FRONTEND:
+ * ```javascript
+ * const { success, message, transaction } = data.createTransaction;
+ * if (success) {
+ *   showSuccess(message);
+ *   displayTransaction(transaction);
+ * } else {
+ *   showError(message);
+ * }
+ * ```
+ */
 public class TransactionResponse {
+    
+    /** ¿La operación fue exitosa? */
     private Boolean success;
+    
+    /** Mensaje descriptivo para el usuario */
     private String message;
+    
+    /** Transacción creada/modificada (null si error) */
     private Transaction transaction;
     
     // =========================================================================
