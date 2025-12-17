@@ -2,7 +2,7 @@
 
 ################################################################################
 # CHAPTER 02: DISEÑO CORRECTO DE SCHEMAS Y BUENAS PRÁCTICAS
-# Script de Testing Automatizado - VERSIÓN CON REQUESTS VISIBLES
+# Script de Testing Automatizado - VERSIÓN PORTABLE
 #
 # Compatible con:
 #   - macOS (Bash 3.2+)
@@ -23,9 +23,6 @@ RED='\033[0;31m'
 YELLOW='\033[1;33m'
 MAGENTA='\033[1;35m'
 CYAN='\033[0;36m'
-BLUE='\033[0;34m'
-WHITE='\033[1;37m'
-GRAY='\033[0;90m'
 NC='\033[0m'
 
 # Config
@@ -75,63 +72,40 @@ print_subsection() {
     log "${MAGENTA}────────────────────────────────────────────────────────────────────────────${NC}"
 }
 
-# Función para ejecutar tests con REQUEST visible y formateado
-run_graphql_test() {
+run_test() {
     local test_name="$1"
-    local graphql_query="$2"
+    local curl_command="$2"
     local validation="$3"
     
     TOTAL_TESTS=$((TOTAL_TESTS + 1))
     
     log "${YELLOW}🧪 Test #${TOTAL_TESTS}: ${test_name}${NC}"
-    log ""
+    log "   Ejecutando..."
     
-    # Mostrar el REQUEST
-    log "${BLUE}📤 REQUEST:${NC}"
-    log "${WHITE}   POST ${GRAPHQL_ENDPOINT}${NC}"
-    log "${WHITE}   Content-Type: application/json${NC}"
-    log ""
-    
-    # Mostrar el BODY JSON formateado correctamente
-    # Reemplazar \" por " para visualización limpia
-    local display_query
-    display_query=$(echo "$graphql_query" | sed 's/\\"/"/g')
-    
-    log "${BLUE}📋 BODY:${NC}"
-    log "${GRAY}   {${NC}"
-    log "${GRAY}     \"query\": \"${CYAN}${display_query}${GRAY}\"${NC}"
-    log "${GRAY}   }${NC}"
-    log ""
-    
-    # Ejecutar curl
-    log "${BLUE}⚡ Ejecutando...${NC}"
-    response=$(curl -s -X POST "${GRAPHQL_ENDPOINT}" \
-        -H "Content-Type: application/json" \
-        -d "{\"query\":\"$graphql_query\"}" 2>&1)
+    response=$(eval "$curl_command" 2>&1)
     exit_code=$?
     
-    # Mostrar respuesta formateada
-    log ""
-    log "${BLUE}📥 RESPONSE:${NC}"
+    # Formatear JSON si jq está disponible
     if command -v jq >/dev/null 2>&1; then
-        formatted=$(echo "$response" | jq '.' 2>/dev/null || echo "$response")
-        # Indentar cada línea del JSON
-        echo "$formatted" | while IFS= read -r line; do
-            log "${GREEN}   $line${NC}"
-        done
+        formatted=$(echo "$response" | jq -C '.' 2>/dev/null || echo "$response")
+        if [ ${#formatted} -gt 400 ]; then
+            log "   📄 Respuesta:\n${formatted:0:400}..."
+        else
+            log "   📄 Respuesta:\n$formatted"
+        fi
     else
-        log "${GREEN}   $response${NC}"
+        if [ ${#response} -gt 200 ]; then
+            log "   📄 Respuesta: ${response:0:200}..."
+        else
+            log "   📄 Respuesta: $response"
+        fi
     fi
     
-    log ""
-    
-    # Validar
     if [ $exit_code -eq 0 ] && echo "$response" | grep -qE "$validation"; then
-        log "${GREEN}   ✅ PASSED${NC}"
+        log "   ${GREEN}✅ PASSED${NC}"
         PASSED_TESTS=$((PASSED_TESTS + 1))
     else
-        log "${RED}   ❌ FAILED${NC}"
-        log "${RED}   Expected pattern: $validation${NC}"
+        log "   ${RED}❌ FAILED${NC}"
         FAILED_TESTS=$((FAILED_TESTS + 1))
     fi
     
@@ -186,46 +160,46 @@ log "${MAGENTA}no acoplado a la base de datos, con entidades bien identificadas.
 log ""
 pause
 
-# Test 1: User con campos orientados a dominio
+# Test 1: User con campos orientados a dominio (no user_id, tier_id, etc.)
 print_subsection "Test 1: Schema orientado a dominio (User con fullName, no first_name/last_name)"
 
-run_graphql_test "User con campos de dominio" \
-    '{ user(id: \"user-001\") { id fullName tier email } }' \
+run_test "User con campos de dominio" \
+    "curl -s -X POST ${GRAPHQL_ENDPOINT} -H 'Content-Type: application/json' -d '{\"query\":\"{ user(id: \\\"user-001\\\") { id fullName tier email } }\"}'" \
     '"fullName".*"Maria Silva"'
 
 # Test 2: Enum bien diseñado (CashbackTier)
 print_subsection "Test 2: Enums bien diseñados (CashbackTier: BRONZE, SILVER, GOLD, PLATINUM)"
 
-run_graphql_test "CashbackTier enum válido" \
-    '{ user(id: \"user-002\") { tier } }' \
+run_test "CashbackTier enum válido" \
+    "curl -s -X POST ${GRAPHQL_ENDPOINT} -H 'Content-Type: application/json' -d '{\"query\":\"{ user(id: \\\"user-002\\\") { tier } }\"}'" \
     '"tier".*"PLATINUM"'
 
 # Test 3: Relaciones bidireccionales (Transaction → User)
 print_subsection "Test 3: Relaciones bidireccionales navegables (Transaction → User)"
 
-run_graphql_test "Navegación Transaction a User" \
-    '{ transaction(id: \"trans-001\") { merchantName user { fullName tier } } }' \
+run_test "Navegación Transaction a User" \
+    "curl -s -X POST ${GRAPHQL_ENDPOINT} -H 'Content-Type: application/json' -d '{\"query\":\"{ transaction(id: \\\"trans-001\\\") { merchantName user { fullName tier } } }\"}'" \
     '"user".*"fullName".*"tier"'
 
 # Test 4: No acoplamiento con DB (campos calculados)
 print_subsection "Test 4: Campos calculados NO presentes en DB (availableCashback)"
 
-run_graphql_test "Campo calculado availableCashback" \
-    '{ user(id: \"user-001\") { availableCashback } }' \
+run_test "Campo calculado availableCashback" \
+    "curl -s -X POST ${GRAPHQL_ENDPOINT} -H 'Content-Type: application/json' -d '{\"query\":\"{ user(id: \\\"user-001\\\") { availableCashback } }\"}'" \
     '"availableCashback".*[0-9]'
 
-# Test 5: Entidades identificadas correctamente
+# Test 5: Entidades identificadas correctamente (User, Transaction, Reward)
 print_subsection "Test 5: Entidades del dominio correctamente identificadas"
 
-run_graphql_test "Entidad User completa" \
-    '{ user(id: \"user-001\") { id fullName tier email enrolledAt } }' \
+run_test "Entidad User completa" \
+    "curl -s -X POST ${GRAPHQL_ENDPOINT} -H 'Content-Type: application/json' -d '{\"query\":\"{ user(id: \\\"user-001\\\") { id fullName tier email enrolledAt } }\"}'" \
     '"id".*"fullName".*"tier".*"email"'
 
-# Test 6: Schema como contrato
+# Test 6: Schema como contrato (no refleja estructura de tablas)
 print_subsection "Test 6: Schema como contrato (independiente de estructura DB)"
 
-run_graphql_test "User sin campos técnicos de DB" \
-    '{ user(id: \"user-001\") { fullName tier } }' \
+run_test "User sin campos técnicos de DB" \
+    "curl -s -X POST ${GRAPHQL_ENDPOINT} -H 'Content-Type: application/json' -d '{\"query\":\"{ user(id: \\\"user-001\\\") { fullName tier } }\"}'" \
     '"fullName".*"tier"'
 
 ################################################################################
@@ -239,60 +213,60 @@ log "${MAGENTA}la diferencia entre Input types y Output types, y nullabilidad co
 log ""
 pause
 
-# Test 7: Custom scalar Money
+# Test 7: Custom scalar Money (precisión decimal)
 print_subsection "Test 7: Custom scalar Money (sin errores de redondeo Float)"
 
-run_graphql_test "Money scalar con precisión" \
-    '{ user(id: \"user-001\") { availableCashback totalCashbackEarned } }' \
+run_test "Money scalar con precisión" \
+    "curl -s -X POST ${GRAPHQL_ENDPOINT} -H 'Content-Type: application/json' -d '{\"query\":\"{ user(id: \\\"user-001\\\") { availableCashback totalCashbackEarned } }\"}'" \
     '"availableCashback".*[0-9]+\.[0-9]+'
 
-# Test 8: Custom scalar Percentage
+# Test 8: Custom scalar Percentage (semánticamente claro)
 print_subsection "Test 8: Custom scalar Percentage (valores 0-100)"
 
-run_graphql_test "Percentage scalar en cashback" \
-    '{ transactions(userId: \"user-001\") { cashbackPercentage } }' \
+run_test "Percentage scalar en cashback" \
+    "curl -s -X POST ${GRAPHQL_ENDPOINT} -H 'Content-Type: application/json' -d '{\"query\":\"{ transactions(userId: \\\"user-001\\\") { cashbackPercentage } }\"}'" \
     '"cashbackPercentage".*[0-9]'
 
-# Test 9: Custom scalar Email
+# Test 9: Custom scalar Email (validación)
 print_subsection "Test 9: Custom scalar Email (formato validado)"
 
-run_graphql_test "Email scalar con validación" \
-    '{ user(id: \"user-001\") { email } }' \
+run_test "Email scalar con validación" \
+    "curl -s -X POST ${GRAPHQL_ENDPOINT} -H 'Content-Type: application/json' -d '{\"query\":\"{ user(id: \\\"user-001\\\") { email } }\"}'" \
     '"email".*@.*\.com'
 
-# Test 10: Custom scalar DateTime
+# Test 10: Custom scalar DateTime (ISO-8601)
 print_subsection "Test 10: Custom scalar DateTime (formato ISO-8601)"
 
-run_graphql_test "DateTime scalar en enrolledAt" \
-    '{ users { enrolledAt } }' \
+run_test "DateTime scalar en enrolledAt" \
+    "curl -s -X POST ${GRAPHQL_ENDPOINT} -H 'Content-Type: application/json' -d '{\"query\":\"{ users { enrolledAt } }\"}'" \
     '"enrolledAt"'
 
-# Test 11: Input types separados
+# Test 11: Object types vs Input types (separación clara)
 print_subsection "Test 11: Input types separados de Output types (CreateTransactionInput)"
 
-run_graphql_test "Mutation con Input type" \
-    'mutation { createTransaction(input: { userId: \"user-001\", amount: 100.0, category: GROCERIES, merchantName: \"Test Store\" }) { success message } }' \
+run_test "Mutation con Input type" \
+    "curl -s -X POST ${GRAPHQL_ENDPOINT} -H 'Content-Type: application/json' -d '{\"query\":\"mutation { createTransaction(input: { userId: \\\"user-001\\\", amount: 100.0, category: GROCERIES, merchantName: \\\"Test Store\\\" }) { success message } }\"}'" \
     '"success".*true'
 
-# Test 12: List types con nullabilidad
+# Test 12: List types con nullabilidad ([Transaction!]!)
 print_subsection "Test 12: List types con nullabilidad correcta ([Type!]!)"
 
-run_graphql_test "Lista de transactions non-null" \
-    '{ transactions(userId: \"user-001\") { id } }' \
+run_test "Lista de transactions non-null" \
+    "curl -s -X POST ${GRAPHQL_ENDPOINT} -H 'Content-Type: application/json' -d '{\"query\":\"{ transactions(userId: \\\"user-001\\\") { id } }\"}'" \
     '"transactions".*\['
 
-# Test 13: Enums descriptivos
+# Test 13: Enums descriptivos (TransactionCategory con valores claros)
 print_subsection "Test 13: Enums descriptivos (TransactionCategory)"
 
-run_graphql_test "TransactionCategory enum" \
-    '{ transactions(category: TRAVEL) { category } }' \
+run_test "TransactionCategory enum" \
+    "curl -s -X POST ${GRAPHQL_ENDPOINT} -H 'Content-Type: application/json' -d '{\"query\":\"{ transactions(category: TRAVEL) { category } }\"}'" \
     '"category".*"TRAVEL"'
 
-# Test 14: Sin FK expuestas
+# Test 14: Independencia del modelo relacional (no FK expuestas)
 print_subsection "Test 14: Sin foreign keys expuestas (user vs userId)"
 
-run_graphql_test "Relación User en Transaction (no userId)" \
-    '{ transaction(id: \"trans-001\") { user { fullName } } }' \
+run_test "Relación User en Transaction (no userId)" \
+    "curl -s -X POST ${GRAPHQL_ENDPOINT} -H 'Content-Type: application/json' -d '{\"query\":\"{ transaction(id: \\\"trans-001\\\") { user { fullName } } }\"}'" \
     '"user".*"fullName"'
 
 ################################################################################
@@ -306,78 +280,78 @@ log "${MAGENTA}estructuras anidadas, campos calculados y mutations complejas.${N
 log ""
 pause
 
-# Test 15: Query con múltiples filtros
+# Test 15: Query con múltiples parámetros opcionales
 print_subsection "Test 15: Query con filtros múltiples (userId, status, category)"
 
-run_graphql_test "Transactions con 3 filtros" \
-    '{ transactions(userId: \"user-002\", status: CONFIRMED, category: SHOPPING) { merchantName } }' \
+run_test "Transactions con 3 filtros" \
+    "curl -s -X POST ${GRAPHQL_ENDPOINT} -H 'Content-Type: application/json' -d '{\"query\":\"{ transactions(userId: \\\"user-002\\\", status: CONFIRMED, category: SHOPPING) { merchantName } }\"}'" \
     '"merchantName"'
 
-# Test 16: Query anidada con campos calculados
+# Test 16: Estructuras anidadas (User → Transactions → CashbackAmount)
 print_subsection "Test 16: Query anidada con campos calculados"
 
-run_graphql_test "Query anidada con cashback calculado" \
-    '{ user(id: \"user-001\") { fullName } transactions(userId: \"user-001\") { cashbackAmount } }' \
+run_test "Query anidada con cashback calculado" \
+    "curl -s -X POST ${GRAPHQL_ENDPOINT} -H 'Content-Type: application/json' -d '{\"query\":\"{ user(id: \\\"user-001\\\") { fullName } transactions(userId: \\\"user-001\\\") { cashbackAmount } }\"}'" \
     '"fullName".*"cashbackAmount"'
 
-# Test 17: Campos calculados con lógica de negocio
+# Test 17: Campos calculados dinámicos (cashbackPercentage según tier + category)
 print_subsection "Test 17: Campos calculados con lógica de negocio"
 
-run_graphql_test "CashbackPercentage calculado (GOLD × TRAVEL = 9%)" \
-    '{ transactions(userId: \"user-001\", category: TRAVEL) { cashbackPercentage } }' \
+run_test "CashbackPercentage calculado (GOLD × TRAVEL = 9%)" \
+    "curl -s -X POST ${GRAPHQL_ENDPOINT} -H 'Content-Type: application/json' -d '{\"query\":\"{ transactions(userId: \\\"user-001\\\", category: TRAVEL) { cashbackPercentage } }\"}'" \
     '"cashbackPercentage".*9'
 
-# Test 18: Mutation con respuesta estructurada
+# Test 18: Mutation que retorna objeto compuesto (TransactionResponse)
 print_subsection "Test 18: Mutation con respuesta estructurada (success + message + data)"
 
-run_graphql_test "createTransaction retorna TransactionResponse" \
-    'mutation { createTransaction(input: { userId: \"user-001\", amount: 200.0, category: RESTAURANTS, merchantName: \"Sushi Bar\" }) { success message transaction { cashbackAmount } } }' \
+run_test "createTransaction retorna TransactionResponse" \
+    "curl -s -X POST ${GRAPHQL_ENDPOINT} -H 'Content-Type: application/json' -d '{\"query\":\"mutation { createTransaction(input: { userId: \\\"user-001\\\", amount: 200.0, category: RESTAURANTS, merchantName: \\\"Sushi Bar\\\" }) { success message transaction { cashbackAmount } } }\"}'" \
     '"success".*true.*"message".*"transaction"'
 
-# Test 19: Mutation que modifica múltiples entidades
+# Test 19: Mutation que modifica múltiples entidades (Transaction + Reward)
 print_subsection "Test 19: Mutation compleja (crea Transaction y genera Reward automáticamente)"
 
-run_graphql_test "createTransaction genera Reward" \
-    'mutation { createTransaction(input: { userId: \"user-001\", amount: 300.0, category: TRAVEL, merchantName: \"Flight Booking\" }) { success transaction { cashbackAmount } } }' \
+run_test "createTransaction genera Reward" \
+    "curl -s -X POST ${GRAPHQL_ENDPOINT} -H 'Content-Type: application/json' -d '{\"query\":\"mutation { createTransaction(input: { userId: \\\"user-001\\\", amount: 300.0, category: TRAVEL, merchantName: \\\"Flight Booking\\\" }) { success transaction { cashbackAmount } } }\"}'" \
     '"cashbackAmount".*27'
 
-# Test 20: Query compleja combinando todo
+# Test 20: Query compleja con filtros, anidación y cálculos
 print_subsection "Test 20: Query compleja combinando todo lo anterior"
 
-run_graphql_test "Query compleja: User + Transactions filtradas + Cashback" \
-    '{ user(id: \"user-001\") { fullName tier availableCashback totalSpent } transactions(userId: \"user-001\", category: RESTAURANTS) { amount merchantName cashbackAmount cashbackPercentage } }' \
+run_test "Query compleja: User + Transactions filtradas + Cashback" \
+    "curl -s -X POST ${GRAPHQL_ENDPOINT} -H 'Content-Type: application/json' -d '{\"query\":\"{ user(id: \\\"user-001\\\") { fullName tier availableCashback totalSpent } transactions(userId: \\\"user-001\\\", category: RESTAURANTS) { amount merchantName cashbackAmount cashbackPercentage } }\"}'" \
     '"fullName".*"availableCashback".*"totalSpent".*"cashbackAmount"'
 
-# Test 21: Validación de Enums
+# Test 21: Aprovechando tipado estático para validación automática
 print_subsection "Test 21: Validación automática de tipos (Enum inválido debería fallar)"
 
-run_graphql_test "Enum TransactionCategory válido" \
-    '{ transactions(category: GROCERIES) { category } }' \
+run_test "Enum TransactionCategory válido" \
+    "curl -s -X POST ${GRAPHQL_ENDPOINT} -H 'Content-Type: application/json' -d '{\"query\":\"{ transactions(category: GROCERIES) { category } }\"}'" \
     '"category".*"GROCERIES"'
 
-# Test 22: Introspection
+# Test 22: Documentación integrada en el schema (comments disponibles)
 print_subsection "Test 22: Schema autodocumentado (introspection funciona)"
 
-run_graphql_test "Introspection del schema" \
-    '{ __type(name: \"User\") { name fields { name type { name } } } }' \
+run_test "Introspection del schema" \
+    "curl -s -X POST ${GRAPHQL_ENDPOINT} -H 'Content-Type: application/json' -d '{\"query\":\"{ __type(name: \\\"User\\\") { name fields { name type { name } } } }\"}'" \
     '"name".*"User"'
 
-# Test 23: Lista con campos calculados
+# Test 23: Queries que retornan listas con elementos calculados
 print_subsection "Test 23: Lista con elementos que tienen campos calculados"
 
-run_graphql_test "Todas las transactions con cashback calculado" \
-    '{ transactions(userId: \"user-001\") { amount cashbackAmount cashbackPercentage } }' \
+run_test "Todas las transactions con cashback calculado" \
+    "curl -s -X POST ${GRAPHQL_ENDPOINT} -H 'Content-Type: application/json' -d '{\"query\":\"{ transactions(userId: \\\"user-001\\\") { amount cashbackAmount cashbackPercentage } }\"}'" \
     '"amount".*"cashbackAmount".*"cashbackPercentage"'
 
-# Test 24: Relación many-to-one
+# Test 24: Validación de relaciones many-to-one
 print_subsection "Test 24: Relación many-to-one (múltiples Transactions → 1 User)"
 
-run_graphql_test "Múltiples transactions del mismo user" \
-    '{ transactions(userId: \"user-001\") { user { fullName } } }' \
+run_test "Múltiples transactions del mismo user" \
+    "curl -s -X POST ${GRAPHQL_ENDPOINT} -H 'Content-Type: application/json' -d '{\"query\":\"{ transactions(userId: \\\"user-001\\\") { user { fullName } } }\"}'" \
     '"fullName".*"Maria Silva"'
 
 ################################################################################
-# BONUS: VALIDACIONES EXTRA
+# BONUS: VALIDACIONES EXTRA (Cobertura completa del diseño)
 ################################################################################
 
 print_section "🎁 BONUS: VALIDACIONES EXTRA DE DISEÑO"
@@ -386,46 +360,46 @@ log "${MAGENTA}Tests adicionales que validan aspectos avanzados del schema desig
 log ""
 pause
 
-# Test 25: Filtrado por categoría
+# Test 25: Filtrado por múltiples categorías
 print_subsection "Test 25: Filtrado preciso (solo TRAVEL transactions)"
 
-run_graphql_test "Solo transacciones TRAVEL" \
-    '{ transactions(category: TRAVEL) { category } }' \
+run_test "Solo transacciones TRAVEL" \
+    "curl -s -X POST ${GRAPHQL_ENDPOINT} -H 'Content-Type: application/json' -d '{\"query\":\"{ transactions(category: TRAVEL) { category } }\"}'" \
     '"category".*"TRAVEL"'
 
-# Test 26: Filtrado de usuarios por tier
+# Test 26: Usuarios filtrados por tier
 print_subsection "Test 26: Filtrado de usuarios por tier (PLATINUM)"
 
-run_graphql_test "Solo usuarios PLATINUM" \
-    '{ users(tier: PLATINUM) { tier fullName } }' \
+run_test "Solo usuarios PLATINUM" \
+    "curl -s -X POST ${GRAPHQL_ENDPOINT} -H 'Content-Type: application/json' -d '{\"query\":\"{ users(tier: PLATINUM) { tier fullName } }\"}'" \
     '"tier".*"PLATINUM"'
 
-# Test 27: Totales calculados
+# Test 27: Totales calculados correctos
 print_subsection "Test 27: Totales calculados (totalSpent, totalCashbackEarned)"
 
-run_graphql_test "Totales de user-001" \
-    '{ user(id: \"user-001\") { totalSpent totalCashbackEarned } }' \
+run_test "Totales de user-001" \
+    "curl -s -X POST ${GRAPHQL_ENDPOINT} -H 'Content-Type: application/json' -d '{\"query\":\"{ user(id: \\\"user-001\\\") { totalSpent totalCashbackEarned } }\"}'" \
     '"totalSpent".*[0-9]+.*"totalCashbackEarned".*[0-9]+'
 
-# Test 28: Cashback diferenciado
+# Test 28: Cashback con diferentes multiplicadores
 print_subsection "Test 28: Cashback diferenciado por categoría (TRAVEL 3x, RESTAURANTS 2x)"
 
-run_graphql_test "TRAVEL con 3x multiplier" \
-    '{ transactions(userId: \"user-001\", category: TRAVEL) { cashbackPercentage } }' \
+run_test "TRAVEL con 3x multiplier" \
+    "curl -s -X POST ${GRAPHQL_ENDPOINT} -H 'Content-Type: application/json' -d '{\"query\":\"{ transactions(userId: \\\"user-001\\\", category: TRAVEL) { cashbackPercentage } }\"}'" \
     '"cashbackPercentage".*9'
 
-# Test 29: User PLATINUM cashback
+# Test 29: User PLATINUM con mayor cashback
 print_subsection "Test 29: User PLATINUM (5% base) vs GOLD (3% base)"
 
-run_graphql_test "PLATINUM user cashback" \
-    '{ user(id: \"user-002\") { tier availableCashback } }' \
+run_test "PLATINUM user cashback" \
+    "curl -s -X POST ${GRAPHQL_ENDPOINT} -H 'Content-Type: application/json' -d '{\"query\":\"{ user(id: \\\"user-002\\\") { tier availableCashback } }\"}'" \
     '"tier".*"PLATINUM".*"availableCashback"'
 
 # Test 30: Lista de todos los usuarios
 print_subsection "Test 30: Query que retorna múltiples usuarios"
 
-run_graphql_test "Todos los usuarios" \
-    '{ users { id fullName tier } }' \
+run_test "Todos los usuarios" \
+    "curl -s -X POST ${GRAPHQL_ENDPOINT} -H 'Content-Type: application/json' -d '{\"query\":\"{ users { id fullName tier } }\"}'" \
     '"id".*"user-001".*"user-002"'
 
 ################################################################################

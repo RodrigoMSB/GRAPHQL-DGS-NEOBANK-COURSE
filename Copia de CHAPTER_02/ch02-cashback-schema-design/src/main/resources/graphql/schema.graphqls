@@ -1,0 +1,796 @@
+# ==============================================================================
+# CAPÍTULO 2: CASHBACK REWARDS - SCHEMA GRAPHQL
+# ==============================================================================
+#
+# 🎯 TEMA: Diseño profesional de Schemas GraphQL
+#
+# Este capítulo enseña las 8 buenas prácticas de diseño:
+# 1. Domain-Driven Design
+# 2. Separación Input/Output
+# 3. Custom Scalars
+# 4. Nullabilidad correcta
+# 5. Relaciones bidireccionales
+# 6. Campos calculados
+# 7. Enums descriptivos
+# 8. Responses estructuradas
+#
+# ==============================================================================
+# MAPEO COMPLETO: SCHEMA GRAPHQL ↔ CLASES JAVA
+# ==============================================================================
+#
+# ┌────────────────────────────────────────────────────────────────────────────┐
+# │  SCHEMA GRAPHQL              │  IMPLEMENTACIÓN JAVA                       │
+# ├────────────────────────────────────────────────────────────────────────────┤
+# │  enum CashbackTier           │  CashbackTier.java (con getBasePercentage) │
+# │  enum TransactionCategory    │  TransactionCategory.java (con multiplier) │
+# │  enum TransactionStatus      │  TransactionStatus.java                    │
+# │  enum RewardStatus           │  RewardStatus.java                         │
+# ├────────────────────────────────────────────────────────────────────────────┤
+# │  type User                   │  User.java + UserQueryResolver             │
+# │  type Transaction            │  Transaction.java + TransactionQueryResolver│
+# │  type Reward                 │  Reward.java                               │
+# ├────────────────────────────────────────────────────────────────────────────┤
+# │  input CreateTransactionInput│  CreateTransactionInput.java               │
+# │  input UpdateUserTierInput   │  UpdateUserTierInput.java                  │
+# │  input RedeemCashbackInput   │  RedeemCashbackInput.java                  │
+# ├────────────────────────────────────────────────────────────────────────────┤
+# │  type TransactionResponse    │  TransactionResponse.java                  │
+# ├────────────────────────────────────────────────────────────────────────────┤
+# │  Query.user                  │  UserQueryResolver.user()                  │
+# │  Query.users                 │  UserQueryResolver.users()                 │
+# │  Query.transaction           │  TransactionQueryResolver.transaction()    │
+# │  Query.transactions          │  TransactionQueryResolver.transactions()   │
+# ├────────────────────────────────────────────────────────────────────────────┤
+# │  Mutation.createTransaction  │  TransactionMutationResolver.createTrans() │
+# ├────────────────────────────────────────────────────────────────────────────┤
+# │  User.transactions           │  UserQueryResolver.transactions() @Schema  │
+# │  User.rewards                │  UserQueryResolver.rewards() @SchemaMapping│
+# │  User.availableCashback      │  UserQueryResolver.availableCashback()     │
+# │  User.totalCashbackEarned    │  UserQueryResolver.totalCashbackEarned()   │
+# │  User.totalSpent             │  UserQueryResolver.totalSpent()            │
+# │  Transaction.user            │  TransactionQueryResolver.user() @Schema   │
+# │  Transaction.cashbackAmount  │  TransactionQueryResolver.cashbackAmount() │
+# │  Transaction.cashbackPercent │  TransactionQueryResolver.cashbackPercent()│
+# └────────────────────────────────────────────────────────────────────────────┘
+#
+# ==============================================================================
+
+
+# ==============================================================================
+# CUSTOM SCALARS
+# ==============================================================================
+#
+# 🎓 SECCIÓN 2.2: Tipos semánticos con validación automática
+#
+# IMPLEMENTACIÓN: GraphQLConfig.java registra estos scalars
+# ```java
+# @Bean
+# public RuntimeWiringConfigurer runtimeWiringConfigurer() {
+#     return wiringBuilder -> wiringBuilder
+#         .scalar(ExtendedScalars.DateTime)
+#         .scalar(moneyScalar())
+#         .scalar(percentageScalar())
+#         .scalar(emailScalar());
+# }
+# ```
+# ==============================================================================
+
+"ISO-8601 timestamp: 2025-11-15T10:30:00Z"
+scalar DateTime
+
+"Decimal preciso para dinero: 125.50 (evita errores de Float)"
+scalar Money
+
+"Porcentaje 0-100: 15.5 significa 15.5%"
+scalar Percentage
+
+"Email con validación: user@example.com"
+scalar Email
+
+
+# ==============================================================================
+# ENUMS
+# ==============================================================================
+
+"""
+Niveles del programa de cashback.
+
+IMPLEMENTACIÓN JAVA: CashbackTier.java
+```java
+public enum CashbackTier {
+    BRONZE(1.0),   // 1% base
+    SILVER(2.0),   // 2% base
+    GOLD(3.0),     // 3% base
+    PLATINUM(5.0); // 5% base
+    
+    private final double basePercentage;
+    
+    public double getBasePercentage() {
+        return basePercentage;
+    }
+    
+    public double getCashbackPercentage(TransactionCategory category) {
+        return basePercentage * category.getCashbackMultiplier();
+    }
+}
+```
+"""
+enum CashbackTier {
+    BRONZE      # 1% cashback base
+    SILVER      # 2% cashback base
+    GOLD        # 3% cashback base
+    PLATINUM    # 5% cashback base
+}
+
+"""
+Categorías de transacciones con multiplicadores de cashback.
+
+IMPLEMENTACIÓN JAVA: TransactionCategory.java
+```java
+public enum TransactionCategory {
+    GROCERIES(1.5),      // 1.5x multiplier
+    RESTAURANTS(2.0),    // 2x multiplier
+    GAS_STATIONS(1.5),   // 1.5x multiplier
+    TRAVEL(3.0),         // 3x multiplier (máximo)
+    ENTERTAINMENT(1.0),  // 1x (sin bonus)
+    // ...
+    
+    public double getCashbackMultiplier() {
+        return cashbackMultiplier;
+    }
+}
+```
+
+EJEMPLO DE CÁLCULO:
+Usuario GOLD (3%) + Categoría RESTAURANTS (2x) = 6% cashback
+"""
+enum TransactionCategory {
+    GROCERIES           # 1.5x multiplier
+    RESTAURANTS         # 2x multiplier
+    GAS_STATIONS        # 1.5x multiplier
+    TRAVEL              # 3x multiplier (máximo)
+    ENTERTAINMENT       # 1x (sin bonus)
+    HEALTH_FITNESS      # 1x
+    SHOPPING            # 1x
+    UTILITIES           # 1x
+    OTHER               # 1x
+}
+
+"""
+Estado de una transacción.
+
+IMPLEMENTACIÓN JAVA: TransactionStatus.java
+```java
+public enum TransactionStatus {
+    PENDING,    // Esperando confirmación
+    CONFIRMED,  // Cashback calculado
+    CANCELLED,  // Sin cashback
+    REFUNDED    // Cashback revertido
+}
+```
+"""
+enum TransactionStatus {
+    PENDING             # Pendiente de confirmación
+    CONFIRMED           # Confirmada, cashback calculado
+    CANCELLED           # Cancelada, sin cashback
+    REFUNDED            # Reembolsada, cashback revertido
+}
+
+"""
+Estado de una recompensa de cashback.
+
+IMPLEMENTACIÓN JAVA: RewardStatus.java
+"""
+enum RewardStatus {
+    PENDING             # 30 días de espera
+    AVAILABLE           # Listo para canjear
+    REDEEMED            # Ya canjeado
+    EXPIRED             # 12 meses sin canjear
+}
+
+
+# ==============================================================================
+# OUTPUT TYPES (Entidades del dominio)
+# ==============================================================================
+
+"""
+Usuario del programa de cashback.
+
+IMPLEMENTACIÓN JAVA: User.java
+```java
+public class User {
+    private String id;
+    private String email;
+    private String fullName;
+    private CashbackTier tier;
+    private LocalDateTime enrolledAt;
+    // Getters, setters, builder...
+}
+```
+
+CAMPOS CALCULADOS: UserQueryResolver.java (@SchemaMapping)
+```java
+@SchemaMapping(typeName = "User")
+public List<Transaction> transactions(User user) {
+    return cashbackService.getTransactionsByUserId(user.getId());
+}
+
+@SchemaMapping(typeName = "User")
+public Double availableCashback(User user) {
+    return cashbackService.calculateAvailableCashback(user.getId());
+}
+```
+"""
+type User {
+    id: ID!
+    email: Email!
+    fullName: String!
+    tier: CashbackTier!
+    enrolledAt: DateTime!
+    
+    """
+    Relación 1:N - Resuelto por @SchemaMapping
+    JAVA: UserQueryResolver.transactions(User user)
+    """
+    transactions(
+        status: TransactionStatus
+        category: TransactionCategory
+        limit: Int = 10
+        offset: Int = 0
+    ): TransactionConnection!
+    
+    """
+    Relación 1:N - Resuelto por @SchemaMapping
+    JAVA: UserQueryResolver.rewards(User user)
+    """
+    rewards(
+        status: RewardStatus
+        limit: Int = 10
+        offset: Int = 0
+    ): RewardConnection!
+    
+    """
+    CAMPO CALCULADO - SUM(rewards.amount) WHERE status=AVAILABLE
+    JAVA: UserQueryResolver.availableCashback(User user)
+    """
+    availableCashback: Money!
+    
+    """
+    CAMPO CALCULADO - SUM(rewards.amount) histórico
+    JAVA: UserQueryResolver.totalCashbackEarned(User user)
+    """
+    totalCashbackEarned: Money!
+    
+    """
+    CAMPO CALCULADO - SUM(transactions.amount) WHERE status=CONFIRMED
+    JAVA: UserQueryResolver.totalSpent(User user)
+    """
+    totalSpent: Money!
+}
+
+"""
+Transacción que genera cashback.
+
+IMPLEMENTACIÓN JAVA: Transaction.java
+```java
+public class Transaction {
+    private String id;
+    private String userId;           // FK a User
+    private Double amount;
+    private TransactionCategory category;
+    private String merchantName;
+    private String description;
+    private LocalDateTime transactionDate;
+    private TransactionStatus status;
+    // Getters, setters, builder...
+}
+```
+
+CAMPOS CALCULADOS: TransactionQueryResolver.java
+```java
+@SchemaMapping(typeName = "Transaction")
+public User user(Transaction transaction) {
+    return cashbackService.getUserById(transaction.getUserId());
+}
+
+@SchemaMapping(typeName = "Transaction")
+public Double cashbackAmount(Transaction transaction) {
+    return cashbackService.calculateCashbackAmount(transaction);
+}
+
+@SchemaMapping(typeName = "Transaction")
+public Double cashbackPercentage(Transaction transaction) {
+    return cashbackService.calculateCashbackPercentage(transaction);
+}
+```
+"""
+type Transaction {
+    id: ID!
+    
+    """
+    Relación N:1 - Resuelto por @SchemaMapping
+    JAVA: TransactionQueryResolver.user(Transaction tx)
+    """
+    user: User!
+    
+    amount: Money!
+    category: TransactionCategory!
+    merchantName: String!
+    description: String              # Nullable - puede ser null
+    transactionDate: DateTime!
+    status: TransactionStatus!
+    
+    """
+    CAMPO CALCULADO: amount × (tierPercentage × categoryMultiplier)
+    JAVA: TransactionQueryResolver.cashbackAmount(Transaction tx)
+    
+    Ejemplo: $100 × (3% GOLD × 2 RESTAURANTS) = $6.00
+    """
+    cashbackAmount: Money!
+    
+    """
+    CAMPO CALCULADO: tierPercentage × categoryMultiplier
+    JAVA: TransactionQueryResolver.cashbackPercentage(Transaction tx)
+    
+    Ejemplo: 3% GOLD × 2 RESTAURANTS = 6%
+    """
+    cashbackPercentage: Percentage!
+    
+    reward: Reward                   # Nullable - solo si ya se creó
+}
+
+"""
+Recompensa de cashback ganada.
+
+IMPLEMENTACIÓN JAVA: Reward.java
+```java
+public class Reward {
+    private String id;
+    private String userId;
+    private String transactionId;
+    private Double amount;
+    private LocalDateTime earnedAt;
+    private LocalDateTime expiresAt;
+    private RewardStatus status;
+    private LocalDateTime redeemedAt;     // Nullable
+    private String redemptionMethod;      // Nullable
+}
+```
+"""
+type Reward {
+    id: ID!
+    user: User!
+    transaction: Transaction!
+    amount: Money!
+    earnedAt: DateTime!
+    expiresAt: DateTime!
+    status: RewardStatus!
+    redeemedAt: DateTime             # Nullable - solo si fue canjeada
+    redemptionMethod: String         # Nullable - solo si fue canjeada
+}
+
+
+# ==============================================================================
+# CONNECTION TYPES (Paginación Relay)
+# ==============================================================================
+
+type TransactionConnection {
+    edges: [TransactionEdge!]!
+    pageInfo: PageInfo!
+    totalCount: Int!
+}
+
+type TransactionEdge {
+    cursor: String!
+    node: Transaction!
+}
+
+type RewardConnection {
+    edges: [RewardEdge!]!
+    pageInfo: PageInfo!
+    totalCount: Int!
+}
+
+type RewardEdge {
+    cursor: String!
+    node: Reward!
+}
+
+type PageInfo {
+    hasNextPage: Boolean!
+    hasPreviousPage: Boolean!
+    startCursor: String
+    endCursor: String
+}
+
+
+# ==============================================================================
+# INPUT TYPES
+# ==============================================================================
+#
+# 🎓 SECCIÓN 2.2: Separación Input/Output
+#
+# ¿Por qué inputs separados?
+# - Input NO tiene id (se genera en servidor)
+# - Input NO tiene status (siempre empieza PENDING)
+# - Input NO tiene campos calculados
+# - Pueden evolucionar independientemente
+# ==============================================================================
+
+"""
+Input para crear transacción.
+
+IMPLEMENTACIÓN JAVA: CreateTransactionInput.java
+```java
+public class CreateTransactionInput {
+    private String userId;
+    private Double amount;
+    private TransactionCategory category;
+    private String merchantName;
+    private String description;           // Opcional
+    private LocalDateTime transactionDate; // Opcional
+}
+```
+
+COMPARACIÓN INPUT vs OUTPUT:
+┌─────────────────────┬──────────────────┬─────────────────────┐
+│ Campo               │ Input (cliente)  │ Output (servidor)   │
+├─────────────────────┼──────────────────┼─────────────────────┤
+│ id                  │ ❌ No existe     │ ✅ Generado         │
+│ userId              │ ✅ Requerido     │ ❌ (tiene user obj) │
+│ amount              │ ✅ Requerido     │ ✅                  │
+│ category            │ ✅ Requerido     │ ✅                  │
+│ merchantName        │ ✅ Requerido     │ ✅                  │
+│ description         │ ⭕ Opcional      │ ⭕ Nullable         │
+│ status              │ ❌ No existe     │ ✅ PENDING→CONFIRMED│
+│ cashbackAmount      │ ❌ No existe     │ ✅ Calculado        │
+│ cashbackPercentage  │ ❌ No existe     │ ✅ Calculado        │
+└─────────────────────┴──────────────────┴─────────────────────┘
+"""
+input CreateTransactionInput {
+    userId: ID!
+    amount: Money!
+    category: TransactionCategory!
+    merchantName: String!
+    description: String              # Opcional
+    transactionDate: DateTime        # Opcional (default: now)
+}
+
+"""
+Input para actualizar tier de usuario.
+
+IMPLEMENTACIÓN JAVA: UpdateUserTierInput.java
+```java
+public class UpdateUserTierInput {
+    private String userId;
+    private CashbackTier newTier;
+    private String reason;           // Para auditoría
+}
+```
+"""
+input UpdateUserTierInput {
+    userId: ID!
+    newTier: CashbackTier!
+    reason: String                   # Para auditoría
+}
+
+"""
+Input para canjear cashback.
+
+IMPLEMENTACIÓN JAVA: RedeemCashbackInput.java
+```java
+public class RedeemCashbackInput {
+    private String userId;
+    private Double amount;
+    private String redemptionMethod; // BANK_TRANSFER, GIFT_CARD, etc.
+}
+```
+"""
+input RedeemCashbackInput {
+    userId: ID!
+    amount: Money!
+    redemptionMethod: String!        # BANK_TRANSFER, GIFT_CARD, etc.
+}
+
+input CancelTransactionInput {
+    transactionId: ID!
+    reason: String!
+}
+
+
+# ==============================================================================
+# RESPONSE TYPES
+# ==============================================================================
+#
+# 🎓 SECCIÓN 2.2: Respuestas estructuradas
+#
+# Patrón consistente: { success, message, data }
+# ==============================================================================
+
+"""
+Respuesta para mutations de transacción.
+
+IMPLEMENTACIÓN JAVA: TransactionResponse.java
+```java
+public class TransactionResponse {
+    private Boolean success;
+    private String message;
+    private Transaction transaction;  // null si error
+    
+    public static Builder builder() { ... }
+}
+```
+
+USO EN RESOLVER:
+```java
+@MutationMapping
+public TransactionResponse createTransaction(@Argument CreateTransactionInput input) {
+    try {
+        Transaction tx = cashbackService.createTransaction(...);
+        return TransactionResponse.builder()
+            .success(true)
+            .message("Transaction created successfully")
+            .transaction(tx)
+            .build();
+    } catch (Exception e) {
+        return TransactionResponse.builder()
+            .success(false)
+            .message("Error: " + e.getMessage())
+            .build();
+    }
+}
+```
+"""
+type TransactionResponse {
+    success: Boolean!
+    message: String!
+    transaction: Transaction         # null si error
+}
+
+type RedemptionResponse {
+    success: Boolean!
+    message: String!
+    redeemedAmount: Money
+    remainingCashback: Money
+    rewards: [Reward!]
+}
+
+type TierUpdateResponse {
+    success: Boolean!
+    message: String!
+    user: User
+    previousTier: CashbackTier
+    newTier: CashbackTier
+}
+
+
+# ==============================================================================
+# QUERIES
+# ==============================================================================
+
+type Query {
+    
+    """
+    Obtener usuario por ID.
+    
+    JAVA: UserQueryResolver.user()
+```java
+    @QueryMapping
+    public User user(@Argument String id) {
+        return cashbackService.getUserById(id);
+    }
+```
+    """
+    user(id: ID!): User
+    
+    """
+    Buscar usuario por email.
+    
+    JAVA: UserQueryResolver.userByEmail()
+    """
+    userByEmail(email: Email!): User
+    
+    """
+    Listar usuarios con filtro opcional por tier.
+    
+    JAVA: UserQueryResolver.users()
+```java
+    @QueryMapping
+    public List<User> users(@Argument CashbackTier tier) {
+        List<User> allUsers = cashbackService.getAllUsers();
+        if (tier == null) return allUsers;
+        return allUsers.stream()
+            .filter(u -> u.getTier() == tier)
+            .toList();
+    }
+```
+    """
+    users(
+        tier: CashbackTier
+        limit: Int = 20
+        offset: Int = 0
+    ): [User!]!
+    
+    """
+    Obtener transacción por ID.
+    
+    JAVA: TransactionQueryResolver.transaction()
+    """
+    transaction(id: ID!): Transaction
+    
+    """
+    Listar transacciones con múltiples filtros opcionales.
+    
+    JAVA: TransactionQueryResolver.transactions()
+```java
+    @QueryMapping
+    public List<Transaction> transactions(
+            @Argument String userId,
+            @Argument TransactionStatus status,
+            @Argument TransactionCategory category) {
+        
+        List<Transaction> txs = (userId != null) 
+            ? cashbackService.getTransactionsByUserId(userId)
+            : cashbackService.getAllTransactions();
+        
+        if (status != null) {
+            txs = txs.stream().filter(t -> t.getStatus() == status).toList();
+        }
+        if (category != null) {
+            txs = txs.stream().filter(t -> t.getCategory() == category).toList();
+        }
+        return txs;
+    }
+```
+    """
+    transactions(
+        userId: ID
+        status: TransactionStatus
+        category: TransactionCategory
+        minAmount: Money
+        maxAmount: Money
+        startDate: DateTime
+        endDate: DateTime
+        limit: Int = 20
+        offset: Int = 0
+    ): [Transaction!]!
+    
+    reward(id: ID!): Reward
+    
+    rewards(
+        userId: ID
+        status: RewardStatus
+        limit: Int = 20
+        offset: Int = 0
+    ): RewardConnection!
+    
+    cashbackSummary(userId: ID!): CashbackSummary!
+}
+
+type CashbackSummary {
+    userId: ID!
+    totalEarned: Money!
+    totalAvailable: Money!
+    totalRedeemed: Money!
+    totalExpired: Money!
+    byCategory: [CategoryCashback!]!
+    byMonth: [MonthlyCashback!]!
+    currentTier: CashbackTier!
+    nextTier: CashbackTier
+    amountToNextTier: Money
+}
+
+type CategoryCashback {
+    category: TransactionCategory!
+    totalEarned: Money!
+    transactionCount: Int!
+    averagePercentage: Percentage!
+}
+
+type MonthlyCashback {
+    month: String!
+    earned: Money!
+    redeemed: Money!
+    transactionCount: Int!
+}
+
+
+# ==============================================================================
+# MUTATIONS
+# ==============================================================================
+
+type Mutation {
+    
+    """
+    Crear nueva transacción y calcular cashback.
+    
+    JAVA: TransactionMutationResolver.createTransaction()
+```java
+    @MutationMapping
+    public TransactionResponse createTransaction(
+            @Argument CreateTransactionInput input) {
+        try {
+            Transaction tx = cashbackService.createTransaction(
+                input.getUserId(),
+                input.getAmount(),
+                input.getCategory(),
+                input.getMerchantName(),
+                input.getDescription(),
+                input.getTransactionDate()
+            );
+            tx = cashbackService.confirmTransaction(tx.getId());
+            
+            return TransactionResponse.builder()
+                .success(true)
+                .message("Transaction created successfully")
+                .transaction(tx)
+                .build();
+        } catch (Exception e) {
+            return TransactionResponse.builder()
+                .success(false)
+                .message("Error: " + e.getMessage())
+                .build();
+        }
+    }
+```
+    
+    EJEMPLO:
+```graphql
+    mutation {
+      createTransaction(input: {
+        userId: "user-001"
+        amount: 150.00
+        category: RESTAURANTS
+        merchantName: "Pizza Palace"
+      }) {
+        success
+        message
+        transaction {
+          id
+          cashbackAmount      # Calculado automáticamente
+          cashbackPercentage  # Calculado automáticamente
+        }
+      }
+    }
+```
+    """
+    createTransaction(input: CreateTransactionInput!): TransactionResponse!
+    
+    cancelTransaction(input: CancelTransactionInput!): TransactionResponse!
+    
+    redeemCashback(input: RedeemCashbackInput!): RedemptionResponse!
+    
+    updateUserTier(input: UpdateUserTierInput!): TierUpdateResponse!
+}
+
+
+# ==============================================================================
+# RESUMEN: ARCHIVOS JAVA DEL CAPÍTULO 2
+# ==============================================================================
+#
+# 📦 MODELOS (model/):
+# ├── User.java                    → type User
+# ├── Transaction.java             → type Transaction  
+# ├── Reward.java                  → type Reward
+# ├── CashbackTier.java            → enum CashbackTier (con porcentajes)
+# ├── TransactionCategory.java     → enum TransactionCategory (con multipliers)
+# ├── TransactionStatus.java       → enum TransactionStatus
+# └── RewardStatus.java            → enum RewardStatus
+#
+# 📦 INPUTS (model/input/):
+# ├── CreateTransactionInput.java  → input CreateTransactionInput
+# ├── UpdateUserTierInput.java     → input UpdateUserTierInput
+# └── RedeemCashbackInput.java     → input RedeemCashbackInput
+#
+# 📦 RESPONSES (model/response/):
+# └── TransactionResponse.java     → type TransactionResponse
+#
+# 📦 RESOLVERS (graphql/):
+# ├── UserQueryResolver.java       → Query.user, users + @SchemaMapping campos
+# ├── TransactionQueryResolver.java→ Query.transaction + @SchemaMapping campos
+# └── TransactionMutationResolver.java → Mutation.createTransaction
+#
+# 📦 CONFIG:
+# └── GraphQLConfig.java           → Registro de custom scalars
+#
+# ==============================================================================

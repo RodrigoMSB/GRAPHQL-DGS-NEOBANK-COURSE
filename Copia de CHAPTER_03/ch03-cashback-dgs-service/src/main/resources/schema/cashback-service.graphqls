@@ -1,0 +1,969 @@
+# ==============================================================================
+# CAPÍTULO 3: CASHBACK SERVICE CON NETFLIX DGS FRAMEWORK
+# ==============================================================================
+#
+# 🎯 TEMA: Implementación completa de GraphQL con Netflix DGS + DataLoaders
+#
+# Este capítulo introduce:
+# - Netflix DGS Framework (alternativa enterprise a Spring for GraphQL)
+# - DataLoaders para resolver el problema N+1
+# - Anotaciones @DgsComponent, @DgsQuery, @DgsMutation, @DgsData
+# - Batch loading para queries eficientes
+#
+# ==============================================================================
+# MAPEO COMPLETO: SCHEMA GRAPHQL ↔ CLASES JAVA
+# ==============================================================================
+#
+# ┌────────────────────────────────────────────────────────────────────────────┐
+# │  SCHEMA GRAPHQL              │  IMPLEMENTACIÓN JAVA                       │
+# ├────────────────────────────────────────────────────────────────────────────┤
+# │  scalar Date                 │  java.time.LocalDate (ScalarConfiguration) │
+# │  scalar DateTime             │  java.time.LocalDateTime                   │
+# │  scalar Money                │  java.math.BigDecimal                      │
+# ├────────────────────────────────────────────────────────────────────────────┤
+# │  enum RewardStatus           │  domain/RewardStatus.java                  │
+# │  enum TransactionCategory    │  domain/TransactionCategory.java           │
+# │  enum RewardTier             │  domain/RewardTier.java                    │
+# ├────────────────────────────────────────────────────────────────────────────┤
+# │  type User                   │  domain/User.java                          │
+# │  type Reward                 │  domain/Reward.java                        │
+# │  type CashbackRule           │  domain/CashbackRule.java                  │
+# │  type TierMultipliers        │  domain/TierMultipliers.java               │
+# │  type RedemptionResult       │  domain/RedemptionResult.java              │
+# │  type RewardsSummary         │  QueryDataFetcher.RewardsSummary (inner)   │
+# │  type CategorySummary        │  QueryDataFetcher.CategorySummary (inner)  │
+# │  type StatusSummary          │  QueryDataFetcher.StatusSummary (inner)    │
+# ├────────────────────────────────────────────────────────────────────────────┤
+# │  input CreateRewardInput     │  MutationDataFetcher.CreateRewardInput     │
+# │  input RedeemCashbackInput   │  MutationDataFetcher.RedeemCashbackInput   │
+# │  input UpdateRewardStatusInput│ MutationDataFetcher.UpdateRewardStatus... │
+# │  input RewardsFilterInput    │  QueryDataFetcher.RewardsFilterInput       │
+# ├────────────────────────────────────────────────────────────────────────────┤
+# │  Query.user                  │  QueryDataFetcher.user() @DgsQuery         │
+# │  Query.usersByTier           │  QueryDataFetcher.usersByTier() @DgsQuery  │
+# │  Query.reward                │  QueryDataFetcher.reward() @DgsQuery       │
+# │  Query.rewards               │  QueryDataFetcher.rewards() @DgsQuery      │
+# │  Query.userRewards           │  QueryDataFetcher.userRewards() @DgsQuery  │
+# │  Query.rewardsSummary        │  QueryDataFetcher.rewardsSummary()         │
+# │  Query.cashbackRules         │  QueryDataFetcher.cashbackRules()          │
+# │  Query.cashbackRule          │  QueryDataFetcher.cashbackRule()           │
+# │  Query.calculateCashback     │  QueryDataFetcher.calculateCashback()      │
+# ├────────────────────────────────────────────────────────────────────────────┤
+# │  Mutation.createReward       │  MutationDataFetcher.createReward()        │
+# │  Mutation.redeemCashback     │  MutationDataFetcher.redeemCashback()      │
+# │  Mutation.updateRewardStatus │  MutationDataFetcher.updateRewardStatus()  │
+# │  Mutation.expireOldRewards   │  MutationDataFetcher.expireOldRewards()    │
+# │  Mutation.upgradeUserTier    │  MutationDataFetcher.upgradeUserTier()     │
+# ├────────────────────────────────────────────────────────────────────────────┤
+# │  User.rewards                │  NestedFieldDataFetcher.userRewards()      │
+# │  Reward.user                 │  NestedFieldDataFetcher.rewardUser()       │
+# ├────────────────────────────────────────────────────────────────────────────┤
+# │  DataLoader "users"          │  dataloader/UserDataLoader.java            │
+# │  DataLoader "rewards"        │  dataloader/RewardsDataLoader.java         │
+# └────────────────────────────────────────────────────────────────────────────┘
+#
+# ==============================================================================
+# 🔥 TEMA CENTRAL: EL PROBLEMA N+1 Y DATALOADERS
+# ==============================================================================
+#
+# SIN DataLoader (problema N+1):
+# ```
+# query {
+#   usersByTier(tier: GOLD) {  # Query 1: obtener 10 usuarios
+#     fullName
+#     rewards {                 # Queries 2-11: 10 queries individuales 😱
+#       amount
+#     }
+#   }
+# }
+# Total: 11 queries
+# ```
+#
+# CON DataLoader (solución):
+# ```
+# query {
+#   usersByTier(tier: GOLD) {  # Query 1: obtener 10 usuarios
+#     fullName
+#     rewards {                 # Query 2: 1 batch para TODAS las rewards 🚀
+#       amount
+#     }
+#   }
+# }
+# Total: 2 queries
+# ```
+#
+# ==============================================================================
+
+
+# ==============================================================================
+# CUSTOM SCALARS
+# ==============================================================================
+#
+# 🎓 SECCIÓN 3.2: Configuración de escalares personalizados
+#
+# IMPLEMENTACIÓN: config/ScalarConfiguration.java
+# ```java
+# @Configuration
+# public class ScalarConfiguration {
+#     @Bean
+#     public RuntimeWiringConfigurer runtimeWiringConfigurer() {
+#         return builder -> builder
+#             .scalar(ExtendedScalars.Date)
+#             .scalar(ExtendedScalars.DateTime)
+#             .scalar(moneyScalar());
+#     }
+# }
+# ```
+# ==============================================================================
+
+"Fecha sin hora: 2025-11-15 → java.time.LocalDate"
+scalar Date
+
+"Timestamp ISO-8601: 2025-11-15T10:30:00Z → java.time.LocalDateTime"
+scalar DateTime
+
+"Dinero con precisión decimal: 125.50 → java.math.BigDecimal"
+scalar Money
+
+
+# ==============================================================================
+# ENUMS
+# ==============================================================================
+
+"""
+Estados de una recompensa cashback.
+
+IMPLEMENTACIÓN JAVA: domain/RewardStatus.java
+```java
+public enum RewardStatus {
+    PENDING,    // Recién creada, pendiente validación
+    ACTIVE,     // Disponible para usar
+    EXPIRED,    // Venció sin usar
+    REDEEMED,   // Ya canjeada
+    CANCELLED   // Cancelada por fraude/políticas
+}
+```
+
+CICLO DE VIDA:
+```
+PENDING → ACTIVE → REDEEMED (happy path)
+                 → EXPIRED (si no se usa)
+        → CANCELLED (fraude detectado)
+```
+"""
+enum RewardStatus {
+    PENDING
+    ACTIVE
+    EXPIRED
+    REDEEMED
+    CANCELLED
+}
+
+"""
+Categorías de transacciones para cashback diferenciado.
+
+IMPLEMENTACIÓN JAVA: domain/TransactionCategory.java
+```java
+public enum TransactionCategory {
+    GROCERIES,        // Alto cashback
+    RESTAURANTS,      // Medio-alto
+    TRANSPORTATION,
+    ENTERTAINMENT,
+    SHOPPING,
+    HEALTH,
+    TRAVEL,           // Alto cashback
+    UTILITIES,        // Bajo cashback
+    EDUCATION,
+    OTHER
+}
+```
+"""
+enum TransactionCategory {
+    GROCERIES
+    RESTAURANTS
+    TRANSPORTATION
+    ENTERTAINMENT
+    SHOPPING
+    HEALTH
+    TRAVEL
+    UTILITIES
+    EDUCATION
+    OTHER
+}
+
+"""
+Niveles de membresía del programa de rewards.
+
+IMPLEMENTACIÓN JAVA: domain/RewardTier.java
+```java
+public enum RewardTier {
+    BRONZE,    // 1.0x multiplicador
+    SILVER,    // 1.5x multiplicador
+    GOLD,      // 2.0x multiplicador
+    PLATINUM   // 3.0x multiplicador
+}
+```
+"""
+enum RewardTier {
+    BRONZE
+    SILVER
+    GOLD
+    PLATINUM
+}
+
+
+# ==============================================================================
+# DOMAIN TYPES
+# ==============================================================================
+
+"""
+Usuario del programa de cashback.
+
+IMPLEMENTACIÓN JAVA: domain/User.java
+```java
+public class User {
+    private String id;
+    private String email;
+    private String fullName;
+    private RewardTier tier;
+    private BigDecimal totalCashbackEarned;
+    private BigDecimal availableCashback;
+    private LocalDateTime createdAt;
+}
+```
+
+CAMPO ANIDADO rewards:
+- NO está en User.java (no tiene List<Reward>)
+- Se resuelve con NestedFieldDataFetcher + DataLoader
+```java
+// NestedFieldDataFetcher.java
+@DgsData(parentType = "User", field = "rewards")
+public CompletableFuture<List<Reward>> userRewards(DgsDataFetchingEnvironment dfe) {
+    User user = dfe.getSource();
+    DataLoader<String, List<Reward>> dataLoader = dfe.getDataLoader("rewards");
+    return dataLoader.load(user.getId());  // Batch loading!
+}
+```
+"""
+type User {
+    id: ID!
+    email: String!
+    fullName: String!
+    tier: RewardTier!
+    totalCashbackEarned: Money!
+    availableCashback: Money!
+    createdAt: DateTime!
+    
+    """
+    🔥 CAMPO RESUELTO CON DATALOADER
+    
+    JAVA: NestedFieldDataFetcher.userRewards() + RewardsDataLoader
+    
+    En lugar de N queries individuales, usa batch loading:
+    - Acumula todas las peticiones de rewards
+    - Ejecuta UNA query batch
+    - Distribuye resultados
+    """
+    rewards: [Reward!]!
+}
+
+"""
+Recompensa cashback generada por una transacción.
+
+IMPLEMENTACIÓN JAVA: domain/Reward.java
+```java
+public class Reward {
+    private String id;
+    private String userId;           // FK - NO el objeto User
+    private BigDecimal amount;
+    private LocalDateTime earnedAt;
+    private LocalDateTime expiresAt;
+    private RewardStatus status;
+    private TransactionCategory category;
+    private String transactionId;
+    private String description;
+    private Double multiplier;
+}
+```
+
+CAMPO ANIDADO user:
+- Reward.java tiene userId (String), NO User
+- Se resuelve con NestedFieldDataFetcher + DataLoader
+```java
+// NestedFieldDataFetcher.java
+@DgsData(parentType = "Reward", field = "user")
+public CompletableFuture<User> rewardUser(DgsDataFetchingEnvironment dfe) {
+    Reward reward = dfe.getSource();
+    DataLoader<String, User> dataLoader = dfe.getDataLoader("users");
+    return dataLoader.load(reward.getUserId());  // Batch loading!
+}
+```
+"""
+type Reward {
+    id: ID!
+    userId: ID!
+    
+    """
+    🔥 CAMPO RESUELTO CON DATALOADER
+    
+    JAVA: NestedFieldDataFetcher.rewardUser() + UserDataLoader
+    """
+    user: User!
+    
+    amount: Money!
+    earnedAt: DateTime!
+    expiresAt: DateTime
+    status: RewardStatus!
+    category: TransactionCategory!
+    transactionId: ID!
+    description: String
+    multiplier: Float!
+}
+
+"""
+Regla de cashback por categoría.
+
+IMPLEMENTACIÓN JAVA: domain/CashbackRule.java
+```java
+public class CashbackRule {
+    private String id;
+    private TransactionCategory category;
+    private Double basePercentage;
+    private TierMultipliers tierMultipliers;
+    private BigDecimal minTransactionAmount;
+    private BigDecimal maxCashbackPerTransaction;
+    private Boolean isActive;
+}
+```
+"""
+type CashbackRule {
+    id: ID!
+    category: TransactionCategory!
+    basePercentage: Float!
+    tierMultipliers: TierMultipliers!
+    minTransactionAmount: Money
+    maxCashbackPerTransaction: Money
+    isActive: Boolean!
+}
+
+"""
+Multiplicadores de cashback por tier.
+
+IMPLEMENTACIÓN JAVA: domain/TierMultipliers.java
+```java
+public class TierMultipliers {
+    private Double bronze;   // 1.0
+    private Double silver;   // 1.5
+    private Double gold;     // 2.0
+    private Double platinum; // 3.0
+}
+```
+
+EJEMPLO DE CÁLCULO:
+Usuario GOLD + Categoría GROCERIES (5% base):
+cashback = monto × 5% × 2.0 = monto × 10%
+"""
+type TierMultipliers {
+    bronze: Float!
+    silver: Float!
+    gold: Float!
+    platinum: Float!
+}
+
+"""
+Resumen agregado de rewards de un usuario.
+
+IMPLEMENTACIÓN JAVA: QueryDataFetcher (inner class)
+```java
+class RewardsSummary {
+    private String userId;
+    private BigDecimal totalEarned;
+    private BigDecimal totalRedeemed;
+    private BigDecimal totalExpired;
+    private BigDecimal availableBalance;
+    private List<CategorySummary> rewardsByCategory;
+    private List<StatusSummary> rewardsByStatus;
+}
+```
+"""
+type RewardsSummary {
+    userId: ID!
+    totalEarned: Money!
+    totalRedeemed: Money!
+    totalExpired: Money!
+    availableBalance: Money!
+    rewardsByCategory: [CategorySummary!]!
+    rewardsByStatus: [StatusSummary!]!
+}
+
+"""
+Cashback agrupado por categoría.
+
+IMPLEMENTACIÓN JAVA: QueryDataFetcher.CategorySummary (inner class)
+"""
+type CategorySummary {
+    category: TransactionCategory!
+    totalAmount: Money!
+    count: Int!
+}
+
+"""
+Cashback agrupado por estado.
+
+IMPLEMENTACIÓN JAVA: QueryDataFetcher.StatusSummary (inner class)
+"""
+type StatusSummary {
+    status: RewardStatus!
+    totalAmount: Money!
+    count: Int!
+}
+
+"""
+Resultado de redención de cashback.
+
+IMPLEMENTACIÓN JAVA: domain/RedemptionResult.java
+```java
+public class RedemptionResult {
+    private Boolean success;
+    private String message;
+    private BigDecimal redeemedAmount;
+    private BigDecimal newBalance;
+    private String transactionId;
+}
+```
+"""
+type RedemptionResult {
+    success: Boolean!
+    message: String!
+    redeemedAmount: Money
+    newBalance: Money
+    transactionId: ID
+}
+
+
+# ==============================================================================
+# INPUT TYPES
+# ==============================================================================
+
+"""
+Input para crear una reward.
+
+IMPLEMENTACIÓN JAVA: MutationDataFetcher.CreateRewardInput (inner class)
+```java
+class CreateRewardInput {
+    private String userId;
+    private String transactionId;
+    private BigDecimal transactionAmount;
+    private TransactionCategory category;
+    private String description;
+}
+```
+"""
+input CreateRewardInput {
+    userId: ID!
+    transactionId: ID!
+    transactionAmount: Money!
+    category: TransactionCategory!
+    description: String
+}
+
+"""
+Input para canjear cashback.
+
+IMPLEMENTACIÓN JAVA: MutationDataFetcher.RedeemCashbackInput (inner class)
+```java
+class RedeemCashbackInput {
+    private String userId;
+    private BigDecimal amount;
+    private String destinationAccount;
+}
+```
+"""
+input RedeemCashbackInput {
+    userId: ID!
+    amount: Money!
+    destinationAccount: String!
+}
+
+"""
+Input para actualizar estado de reward.
+
+IMPLEMENTACIÓN JAVA: MutationDataFetcher.UpdateRewardStatusInput (inner class)
+```java
+class UpdateRewardStatusInput {
+    private String rewardId;
+    private RewardStatus newStatus;
+    private String reason;
+}
+```
+"""
+input UpdateRewardStatusInput {
+    rewardId: ID!
+    newStatus: RewardStatus!
+    reason: String
+}
+
+"""
+Filtros para buscar rewards.
+
+IMPLEMENTACIÓN JAVA: QueryDataFetcher.RewardsFilterInput (inner class)
+```java
+class RewardsFilterInput {
+    private String userId;
+    private RewardStatus status;
+    private TransactionCategory category;
+    private BigDecimal minAmount;
+    private BigDecimal maxAmount;
+    private LocalDateTime earnedAfter;
+    private LocalDateTime earnedBefore;
+}
+```
+"""
+input RewardsFilterInput {
+    userId: ID
+    status: RewardStatus
+    category: TransactionCategory
+    minAmount: Money
+    maxAmount: Money
+    earnedAfter: DateTime
+    earnedBefore: DateTime
+}
+
+
+# ==============================================================================
+# QUERIES
+# ==============================================================================
+#
+# 🎓 SECCIÓN 3.3: Implementación de queries con @DgsQuery
+#
+# IMPLEMENTACIÓN: datafetcher/QueryDataFetcher.java
+# ```java
+# @DgsComponent
+# public class QueryDataFetcher {
+#     @DgsQuery
+#     public User user(@InputArgument String id) { ... }
+# }
+# ```
+# ==============================================================================
+
+type Query {
+    
+    """
+    Obtener usuario por ID.
+    
+    JAVA: QueryDataFetcher.user()
+```java
+    @DgsQuery
+    public User user(@InputArgument String id) {
+        return userRepository.findById(id).orElse(null);
+    }
+```
+    """
+    user(id: ID!): User
+    
+    """
+    Filtrar usuarios por tier.
+    
+    JAVA: QueryDataFetcher.usersByTier()
+```java
+    @DgsQuery
+    public List<User> usersByTier(@InputArgument RewardTier tier) {
+        return userRepository.findByTier(tier);
+    }
+```
+    
+    💡 EJEMPLO CON DATALOADER:
+```graphql
+    query {
+      usersByTier(tier: GOLD) {
+        fullName
+        rewards {        # ← Usa RewardsDataLoader (1 batch query)
+          amount
+          user {         # ← Usa UserDataLoader (1 batch query)
+            email
+          }
+        }
+      }
+    }
+    # Total: 3 queries en lugar de N+1
+```
+    """
+    usersByTier(tier: RewardTier!): [User!]!
+    
+    """
+    Obtener reward por ID.
+    
+    JAVA: QueryDataFetcher.reward()
+```java
+    @DgsQuery
+    public Reward reward(@InputArgument String id) {
+        return rewardRepository.findById(id).orElse(null);
+    }
+```
+    """
+    reward(id: ID!): Reward
+    
+    """
+    Listar rewards con filtros complejos.
+    
+    JAVA: QueryDataFetcher.rewards()
+```java
+    @DgsQuery
+    public List<Reward> rewards(@InputArgument RewardsFilterInput filter) {
+        List<Reward> allRewards = rewardRepository.findAll();
+        if (filter == null) return allRewards;
+        
+        return allRewards.stream()
+            .filter(r -> filter.getUserId() == null || 
+                         r.getUserId().equals(filter.getUserId()))
+            .filter(r -> filter.getStatus() == null || 
+                         r.getStatus() == filter.getStatus())
+            // ... más filtros
+            .collect(Collectors.toList());
+    }
+```
+    """
+    rewards(filter: RewardsFilterInput): [Reward!]!
+    
+    """
+    Rewards de un usuario con filtro opcional de estado.
+    
+    JAVA: QueryDataFetcher.userRewards()
+```java
+    @DgsQuery
+    public List<Reward> userRewards(
+            @InputArgument String userId,
+            @InputArgument(name = "status") RewardStatus rewardStatus) {
+        if (rewardStatus != null) {
+            return rewardRepository.findByUserIdAndStatus(userId, rewardStatus);
+        }
+        return rewardRepository.findByUserId(userId);
+    }
+```
+    """
+    userRewards(userId: ID!, status: RewardStatus): [Reward!]!
+    
+    """
+    Resumen agregado de rewards de un usuario.
+    
+    JAVA: QueryDataFetcher.rewardsSummary()
+    - Calcula totalEarned, totalRedeemed, totalExpired
+    - Agrupa por categoría y estado
+    """
+    rewardsSummary(userId: ID!): RewardsSummary
+    
+    """
+    Listar todas las reglas de cashback.
+    
+    JAVA: QueryDataFetcher.cashbackRules()
+```java
+    @DgsQuery
+    public List<CashbackRule> cashbackRules() {
+        return ruleRepository.findAll();
+    }
+```
+    """
+    cashbackRules: [CashbackRule!]!
+    
+    """
+    Obtener regla de una categoría específica.
+    
+    JAVA: QueryDataFetcher.cashbackRule()
+```java
+    @DgsQuery
+    public CashbackRule cashbackRule(@InputArgument TransactionCategory category) {
+        return ruleRepository.findByCategory(category).orElse(null);
+    }
+```
+    """
+    cashbackRule(category: TransactionCategory!): CashbackRule
+    
+    """
+    Calcular cashback estimado para una transacción hipotética.
+    
+    JAVA: QueryDataFetcher.calculateCashback()
+```java
+    @DgsQuery
+    public BigDecimal calculateCashback(
+            @InputArgument String userId,
+            @InputArgument BigDecimal transactionAmount,
+            @InputArgument TransactionCategory category) {
+        return cashbackService.calculateCashback(userId, transactionAmount, category);
+    }
+```
+    
+    💡 ÚTIL PARA:
+    Mostrar al usuario cuánto ganará ANTES de hacer la compra.
+    """
+    calculateCashback(
+        userId: ID!
+        transactionAmount: Money!
+        category: TransactionCategory!
+    ): Money!
+}
+
+
+# ==============================================================================
+# MUTATIONS
+# ==============================================================================
+#
+# 🎓 SECCIÓN 3.4: Implementación de mutations con @DgsMutation
+#
+# IMPLEMENTACIÓN: datafetcher/MutationDataFetcher.java
+# ```java
+# @DgsComponent
+# public class MutationDataFetcher {
+#     @DgsMutation
+#     public Reward createReward(@InputArgument CreateRewardInput input) { ... }
+# }
+# ```
+# ==============================================================================
+
+type Mutation {
+    
+    """
+    Crear reward basada en una transacción.
+    
+    JAVA: MutationDataFetcher.createReward()
+```java
+    @DgsMutation
+    public Reward createReward(@InputArgument CreateRewardInput input) {
+        return cashbackService.createReward(
+            input.getUserId(),
+            input.getTransactionId(),
+            input.getTransactionAmount(),
+            input.getCategory(),
+            input.getDescription()
+        );
+    }
+```
+    
+    💡 FLUJO TÍPICO:
+    1. Usuario hace compra con tarjeta NeoBank
+    2. Sistema emite evento TRANSACTION_COMPLETED
+    3. Cashback Service ejecuta esta mutation
+    4. Se crea reward y acredita al usuario
+    """
+    createReward(input: CreateRewardInput!): Reward!
+    
+    """
+    Canjear cashback disponible.
+    
+    JAVA: MutationDataFetcher.redeemCashback()
+```java
+    @DgsMutation
+    public RedemptionResult redeemCashback(@InputArgument RedeemCashbackInput input) {
+        return cashbackService.redeemCashback(
+            input.getUserId(),
+            input.getAmount(),
+            input.getDestinationAccount()
+        );
+    }
+```
+    
+    💡 MÉTODOS DE REDENCIÓN:
+    - Transferencia a cuenta bancaria
+    - Pago de tarjeta de crédito
+    - Crédito en cuenta
+    """
+    redeemCashback(input: RedeemCashbackInput!): RedemptionResult!
+    
+    """
+    Actualizar estado de una reward (admin).
+    
+    JAVA: MutationDataFetcher.updateRewardStatus()
+```java
+    @DgsMutation
+    public Reward updateRewardStatus(@InputArgument UpdateRewardStatusInput input) {
+        return cashbackService.updateRewardStatus(
+            input.getRewardId(),
+            input.getNewStatus(),
+            input.getReason()
+        );
+    }
+```
+    
+    💡 CASOS DE USO:
+    - Cancelar por fraude detectado
+    - Marcar como expirada
+    - Reversiones por devoluciones
+    """
+    updateRewardStatus(input: UpdateRewardStatusInput!): Reward!
+    
+    """
+    Job batch para expirar rewards vencidas.
+    
+    JAVA: MutationDataFetcher.expireOldRewards()
+```java
+    @DgsMutation
+    public Integer expireOldRewards() {
+        return cashbackService.expireOldRewards();
+    }
+```
+    
+    💡 EJECUCIÓN TÍPICA:
+    - Via cron job diario
+    - Via @Scheduled de Spring
+    - Manualmente por admin
+    
+    Retorna cantidad de rewards expiradas.
+    """
+    expireOldRewards: Int!
+    
+    """
+    Promocionar usuario a tier superior.
+    
+    JAVA: MutationDataFetcher.upgradeUserTier()
+```java
+    @DgsMutation
+    public User upgradeUserTier(
+            @InputArgument String userId,
+            @InputArgument RewardTier newTier) {
+        return cashbackService.upgradeUserTier(userId, newTier);
+    }
+```
+    
+    💡 CRITERIOS DE UPGRADE:
+    - Total cashback ganado
+    - Número de transacciones
+    - Monto total gastado
+    - Promociones especiales
+    """
+    upgradeUserTier(userId: ID!, newTier: RewardTier!): User!
+}
+
+
+# ==============================================================================
+# 🔥 DATALOADERS - LA MAGIA DETRÁS DE ESCENAS
+# ==============================================================================
+#
+# Los DataLoaders NO aparecen en el schema GraphQL, pero son CRÍTICOS
+# para el rendimiento. Resuelven campos anidados de forma eficiente.
+#
+# ────────────────────────────────────────────────────────────────────
+# USERDATALOADER: Carga usuarios en batch
+# ────────────────────────────────────────────────────────────────────
+#
+# ARCHIVO: dataloader/UserDataLoader.java
+#
+# ```java
+# @DgsDataLoader(name = "users")
+# public class UserDataLoader implements BatchLoader<String, User> {
+#     
+#     @Override
+#     public CompletionStage<List<User>> load(List<String> userIds) {
+#         System.out.println("🔥 Batch loading " + userIds.size() + " users");
+#         
+#         // 1 query para TODOS los usuarios solicitados
+#         List<User> allUsers = userRepository.findAll();
+#         
+#         // Crear mapa para lookup eficiente
+#         Map<String, User> userMap = allUsers.stream()
+#             .filter(user -> userIds.contains(user.getId()))
+#             .collect(Collectors.toMap(User::getId, user -> user));
+#         
+#         // CRÍTICO: Devolver en el MISMO ORDEN que las keys
+#         List<User> result = userIds.stream()
+#             .map(userMap::get)
+#             .collect(Collectors.toList());
+#         
+#         return CompletableFuture.completedFuture(result);
+#     }
+# }
+# ```
+#
+# ────────────────────────────────────────────────────────────────────
+# REWARDSDATALOADER: Carga rewards por usuario en batch
+# ────────────────────────────────────────────────────────────────────
+#
+# ARCHIVO: dataloader/RewardsDataLoader.java
+#
+# ```java
+# @DgsDataLoader(name = "rewards")
+# public class RewardsDataLoader implements BatchLoader<String, List<Reward>> {
+#     
+#     @Override
+#     public CompletionStage<List<List<Reward>>> load(List<String> userIds) {
+#         System.out.println("🔥 Batch loading rewards for " + userIds.size() + " users");
+#         
+#         // 1 query para TODAS las rewards
+#         List<Reward> allRewards = rewardRepository.findAll();
+#         
+#         // Agrupar por userId
+#         Map<String, List<Reward>> rewardsByUser = allRewards.stream()
+#             .filter(r -> userIds.contains(r.getUserId()))
+#             .collect(Collectors.groupingBy(Reward::getUserId));
+#         
+#         // CRÍTICO: Devolver lista vacía (NO null) si usuario no tiene rewards
+#         List<List<Reward>> result = userIds.stream()
+#             .map(userId -> rewardsByUser.getOrDefault(userId, List.of()))
+#             .collect(Collectors.toList());
+#         
+#         return CompletableFuture.completedFuture(result);
+#     }
+# }
+# ```
+#
+# ────────────────────────────────────────────────────────────────────
+# DIFERENCIA CLAVE:
+# ────────────────────────────────────────────────────────────────────
+#
+# UserDataLoader:    BatchLoader<String, User>          → UN User por key
+# RewardsDataLoader: BatchLoader<String, List<Reward>>  → LISTA por key
+#
+# Para relaciones 1:N (User → Rewards), usa List<V>
+# Para relaciones N:1 (Reward → User), usa V
+#
+# ==============================================================================
+
+
+# ==============================================================================
+# RESUMEN: ARCHIVOS JAVA DEL CAPÍTULO 3
+# ==============================================================================
+#
+# 📦 DOMAIN (domain/):
+# ├── User.java                    → type User (sin rewards)
+# ├── Reward.java                  → type Reward (con userId, sin user)
+# ├── CashbackRule.java            → type CashbackRule
+# ├── TierMultipliers.java         → type TierMultipliers
+# ├── RedemptionResult.java        → type RedemptionResult
+# ├── RewardStatus.java            → enum RewardStatus
+# ├── RewardTier.java              → enum RewardTier
+# └── TransactionCategory.java     → enum TransactionCategory
+#
+# 📦 DATAFETCHERS (datafetcher/):
+# ├── QueryDataFetcher.java        → Todas las @DgsQuery
+# │   └── Inner classes: RewardsFilterInput, RewardsSummary, 
+# │                      CategorySummary, StatusSummary
+# ├── MutationDataFetcher.java     → Todas las @DgsMutation
+# │   └── Inner classes: CreateRewardInput, RedeemCashbackInput,
+# │                      UpdateRewardStatusInput
+# └── NestedFieldDataFetcher.java  → @DgsData para User.rewards, Reward.user
+#
+# 📦 DATALOADERS (dataloader/):
+# ├── UserDataLoader.java          → BatchLoader<String, User>
+# └── RewardsDataLoader.java       → BatchLoader<String, List<Reward>>
+#
+# 📦 CONFIG (config/):
+# └── ScalarConfiguration.java     → Registro de scalars Date, DateTime, Money
+#
+# 📦 REPOSITORIES (repository/):
+# ├── UserRepository.java          → Acceso a datos de usuarios
+# ├── RewardRepository.java        → Acceso a datos de rewards
+# └── CashbackRuleRepository.java  → Acceso a reglas de cashback
+#
+# 📦 SERVICE (service/):
+# └── CashbackService.java         → Lógica de negocio de cashback
+#
+# ==============================================================================
+#
+# 🎯 ANOTACIONES DGS USADAS:
+#
+# @DgsComponent      → Marca clase como componente DGS (similar a @Component)
+# @DgsQuery          → Método resuelve una Query del schema
+# @DgsMutation       → Método resuelve una Mutation del schema
+# @DgsData           → Método resuelve un campo específico de un type
+# @DgsDataLoader     → Registra un BatchLoader para optimización N+1
+# @InputArgument     → Inyecta argumento de la query/mutation
+#
+# ==============================================================================
