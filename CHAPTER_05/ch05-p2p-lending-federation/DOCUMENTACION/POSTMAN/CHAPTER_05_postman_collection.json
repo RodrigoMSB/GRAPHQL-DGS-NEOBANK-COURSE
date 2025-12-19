@@ -1,0 +1,643 @@
+{
+  "info": {
+    "_postman_id": "ch05-p2p-lending-federation",
+    "name": "CHAPTER 05: Apollo Federation - P2P Lending Marketplace",
+    "description": "Complete test suite for Chapter 05 - Apollo Federation with Netflix DGS\n\n**Covers:**\n- Test 1-4: Users Service (8081) - Subgraph Queries\n- Test 5-7: Loans Service (8082) - Subgraph Queries\n- Test 8-9: Mutations in Federated Services\n- Test 10-12: 🔥 GATEWAY (8080) - Federated Queries (LA MAGIA)\n\n**Total: 12 automated tests**\n\n**Feature:** P2P Lending Marketplace (Préstamos entre Personas)\n**Architecture:** Apollo Federation with 2 Subgraphs\n**Stack:** Spring Boot 3.2 + Netflix DGS 8.2.0 + Docker\n\n**Endpoints:**\n- Users Service: http://localhost:8081/graphql\n- Loans Service: http://localhost:8082/graphql\n- Gateway: http://localhost:8080/graphql ← LA MAGIA ESTÁ AQUÍ\n\n**Prerequisites:**\n1. Run: `./start-federation.sh`\n2. Or: `docker-compose up -d --build`",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "1️⃣ USERS SERVICE (8081)",
+      "item": [
+        {
+          "name": "Test 1 - Query users - Lista de usuarios",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"Response has users array\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.data).to.exist;",
+                  "    pm.expect(jsonData.data.users).to.be.an('array');",
+                  "});",
+                  "",
+                  "pm.test(\"Contains user Alice Thompson\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    var hasAlice = jsonData.data.users.some(u => u.fullName === 'Alice Thompson');",
+                  "    pm.expect(hasAlice).to.be.true;",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "graphql",
+              "graphql": {
+                "query": "{\n  users {\n    id\n    fullName\n    email\n    userType\n  }\n}",
+                "variables": ""
+              }
+            },
+            "url": {
+              "raw": "{{USERS_SERVICE}}",
+              "host": [
+                "{{USERS_SERVICE}}"
+              ]
+            },
+            "description": "**Subgraph Query - Users Service**\n\nFetches all users from the Users subgraph.\n\n**Expected:** List of users including Alice Thompson (user-001)"
+          },
+          "response": []
+        },
+        {
+          "name": "Test 2 - Query user por ID",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"User is Alice Thompson\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.data.user.fullName).to.eql('Alice Thompson');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "graphql",
+              "graphql": {
+                "query": "{\n  user(id: \"user-001\") {\n    id\n    fullName\n    email\n    userType\n    reputation\n  }\n}",
+                "variables": ""
+              }
+            },
+            "url": {
+              "raw": "{{USERS_SERVICE}}",
+              "host": [
+                "{{USERS_SERVICE}}"
+              ]
+            },
+            "description": "**Query with Arguments**\n\nFetches a specific user by ID."
+          },
+          "response": []
+        },
+        {
+          "name": "Test 3 - Query verifiedLenders con LenderProfile",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"Lenders have LenderProfile\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    var lender = jsonData.data.verifiedLenders[0];",
+                  "    pm.expect(lender.lenderProfile).to.exist;",
+                  "    pm.expect(lender.lenderProfile).to.have.property('totalLent');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "graphql",
+              "graphql": {
+                "query": "{\n  verifiedLenders {\n    id\n    fullName\n    lenderProfile {\n      verified\n      totalLent\n      activeLoans\n    }\n  }\n}",
+                "variables": ""
+              }
+            },
+            "url": {
+              "raw": "{{USERS_SERVICE}}",
+              "host": [
+                "{{USERS_SERVICE}}"
+              ]
+            },
+            "description": "**Nested Types Query**\n\nFetches verified lenders with their LenderProfile."
+          },
+          "response": []
+        },
+        {
+          "name": "Test 4 - Entity Resolution (_entities)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"Resolved user is Alice Thompson\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    var user = jsonData.data._entities[0];",
+                  "    pm.expect(user.fullName).to.eql('Alice Thompson');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "graphql",
+              "graphql": {
+                "query": "{\n  _entities(representations: [{__typename: \"User\", id: \"user-001\"}]) {\n    ... on User {\n      id\n      fullName\n      email\n    }\n  }\n}",
+                "variables": ""
+              }
+            },
+            "url": {
+              "raw": "{{USERS_SERVICE}}",
+              "host": [
+                "{{USERS_SERVICE}}"
+              ]
+            },
+            "description": "**Federation Entity Resolution**\n\nTests the special `_entities` query that Apollo Federation generates automatically."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "2️⃣ LOANS SERVICE (8082)",
+      "item": [
+        {
+          "name": "Test 5 - Query loans - Lista de préstamos",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"Contains loan-001 ACTIVE\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    var hasLoan001 = jsonData.data.loans.some(l => l.id === 'loan-001' && l.status === 'ACTIVE');",
+                  "    pm.expect(hasLoan001).to.be.true;",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "graphql",
+              "graphql": {
+                "query": "{\n  loans {\n    id\n    amount\n    status\n    purpose\n    interestRate\n    term\n  }\n}",
+                "variables": ""
+              }
+            },
+            "url": {
+              "raw": "{{LOANS_SERVICE}}",
+              "host": [
+                "{{LOANS_SERVICE}}"
+              ]
+            },
+            "description": "**Subgraph Query - Loans Service**\n\nFetches all loans from the Loans subgraph."
+          },
+          "response": []
+        },
+        {
+          "name": "Test 6 - Query loansByStatus ACTIVE",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"All loans are ACTIVE\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    jsonData.data.loansByStatus.forEach(loan => {",
+                  "        pm.expect(loan.status).to.eql('ACTIVE');",
+                  "    });",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "graphql",
+              "graphql": {
+                "query": "{\n  loansByStatus(status: ACTIVE) {\n    id\n    amount\n    status\n  }\n}",
+                "variables": ""
+              }
+            },
+            "url": {
+              "raw": "{{LOANS_SERVICE}}",
+              "host": [
+                "{{LOANS_SERVICE}}"
+              ]
+            },
+            "description": "**Enum Filter Query**\n\nFilters loans by LoanStatus enum."
+          },
+          "response": []
+        },
+        {
+          "name": "Test 7 - Loans con User stubs (solo IDs)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"Loans have borrower ID\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    var loan = jsonData.data.loans[0];",
+                  "    pm.expect(loan.borrower).to.exist;",
+                  "    pm.expect(loan.borrower.id).to.match(/^user-/);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "graphql",
+              "graphql": {
+                "query": "{\n  loans {\n    id\n    amount\n    borrower {\n      id\n    }\n    lender {\n      id\n    }\n  }\n}",
+                "variables": ""
+              }
+            },
+            "url": {
+              "raw": "{{LOANS_SERVICE}}",
+              "host": [
+                "{{LOANS_SERVICE}}"
+              ]
+            },
+            "description": "**Cross-Service References (Stubs)**\n\n⚠️ NOTA: Aquí solo obtienes el ID del borrower porque Loans Service NO tiene los datos del User.\n\nPara obtener fullName, email, etc. necesitas ir al GATEWAY."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "3️⃣ MUTATIONS",
+      "item": [
+        {
+          "name": "Test 8 - Mutation createUser (Users Service)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"Mutation was successful\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.data.createUser.success).to.be.true;",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "graphql",
+              "graphql": {
+                "query": "mutation {\n  createUser(input: {\n    email: \"nuevo@test.com\"\n    fullName: \"Nuevo Usuario\"\n    userType: LENDER\n  }) {\n    success\n    message\n    user {\n      id\n      fullName\n    }\n  }\n}",
+                "variables": ""
+              }
+            },
+            "url": {
+              "raw": "{{USERS_SERVICE}}",
+              "host": [
+                "{{USERS_SERVICE}}"
+              ]
+            },
+            "description": "**Mutation in Users Service**"
+          },
+          "response": []
+        },
+        {
+          "name": "Test 9 - Mutation createLoanRequest (Loans Service)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"Mutation was successful\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.data.createLoanRequest.success).to.be.true;",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "graphql",
+              "graphql": {
+                "query": "mutation {\n  createLoanRequest(input: {\n    borrowerId: \"user-003\"\n    amount: 5000\n    interestRate: 8.5\n    term: 12\n    purpose: \"Test loan federation\"\n  }) {\n    success\n    message\n    loan {\n      id\n      amount\n      status\n    }\n  }\n}",
+                "variables": ""
+              }
+            },
+            "url": {
+              "raw": "{{LOANS_SERVICE}}",
+              "host": [
+                "{{LOANS_SERVICE}}"
+              ]
+            },
+            "description": "**Mutation in Loans Service**"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "🔥 4️⃣ GATEWAY (8080) - LA MAGIA DE FEDERATION",
+      "item": [
+        {
+          "name": "Test 10 - 🔥 User con loansAsLender (CRUZA SERVICIOS)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"User has data from USERS service\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.data.user.fullName).to.eql('Alice Thompson');",
+                  "    pm.expect(jsonData.data.user.email).to.exist;",
+                  "});",
+                  "",
+                  "pm.test(\"User has loansAsLender from LOANS service\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.data.user.loansAsLender).to.be.an('array');",
+                  "});",
+                  "",
+                  "pm.test(\"Loans have amount (from LOANS service)\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    if (jsonData.data.user.loansAsLender.length > 0) {",
+                  "        pm.expect(jsonData.data.user.loansAsLender[0]).to.have.property('amount');",
+                  "    }",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "graphql",
+              "graphql": {
+                "query": "{\n  user(id: \"user-001\") {\n    id\n    fullName\n    email\n    loansAsLender {\n      id\n      amount\n      status\n    }\n  }\n}",
+                "variables": ""
+              }
+            },
+            "url": {
+              "raw": "{{GATEWAY}}",
+              "host": [
+                "{{GATEWAY}}"
+              ]
+            },
+            "description": "# 🔥 AQUÍ ESTÁ LA MAGIA DE FEDERATION\n\n**UNA query, DOS servicios:**\n\n```\nGateway recibe query\n    │\n    ├─► USERS SERVICE (8081)\n    │   └─► fullName, email\n    │\n    └─► LOANS SERVICE (8082)\n        └─► loansAsLender\n```\n\n**El cliente NO sabe que hay 2 servicios.**\n**El Gateway orquesta todo automáticamente.**\n\n## Flujo interno:\n1. Gateway pide `user(id)` a Users Service → obtiene {id, fullName, email}\n2. Gateway detecta que `loansAsLender` pertenece a Loans Service\n3. Gateway pide a Loans Service los préstamos de ese user\n4. Gateway COMBINA las respuestas y retorna al cliente"
+          },
+          "response": []
+        },
+        {
+          "name": "Test 11 - 🔥 Loan con borrower.fullName (CRUZA SERVICIOS)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"Loans have data from LOANS service\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    var loan = jsonData.data.loans[0];",
+                  "    pm.expect(loan).to.have.property('amount');",
+                  "    pm.expect(loan).to.have.property('status');",
+                  "});",
+                  "",
+                  "pm.test(\"Borrower has fullName from USERS service\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    var loan = jsonData.data.loans[0];",
+                  "    pm.expect(loan.borrower).to.have.property('fullName');",
+                  "    pm.expect(loan.borrower.fullName).to.be.a('string');",
+                  "});",
+                  "",
+                  "pm.test(\"Borrower has email from USERS service\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    var loan = jsonData.data.loans[0];",
+                  "    pm.expect(loan.borrower).to.have.property('email');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "graphql",
+              "graphql": {
+                "query": "{\n  loans {\n    id\n    amount\n    status\n    purpose\n    borrower {\n      id\n      fullName\n      email\n    }\n    lender {\n      id\n      fullName\n    }\n  }\n}",
+                "variables": ""
+              }
+            },
+            "url": {
+              "raw": "{{GATEWAY}}",
+              "host": [
+                "{{GATEWAY}}"
+              ]
+            },
+            "description": "# 🔥 OTRA MAGIA: Loan con User completo\n\n**Compara con Test 7:**\n- Test 7 (Loans Service directo): Solo obtienes `borrower.id`\n- Test 11 (Gateway): Obtienes `borrower.fullName`, `borrower.email`\n\n**¿Por qué?**\n\nLoans Service solo tiene el ID del borrower.\nEl Gateway detecta que pides `fullName` y `email`, entonces:\n1. Obtiene loans de Loans Service\n2. Extrae los IDs de borrower/lender\n3. Llama a Users Service con `_entities` para resolver los Users completos\n4. COMBINA todo y retorna"
+          },
+          "response": []
+        },
+        {
+          "name": "Test 12 - 🔥 Query compleja multi-nivel",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"User has data from both services\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    var user = jsonData.data.user;",
+                  "    // From USERS service",
+                  "    pm.expect(user.fullName).to.exist;",
+                  "    pm.expect(user.lenderProfile).to.exist;",
+                  "    // From LOANS service",
+                  "    pm.expect(user.loansAsBorrower).to.be.an('array');",
+                  "});",
+                  "",
+                  "pm.test(\"Nested loans have borrower names\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    var loans = jsonData.data.user.loansAsBorrower;",
+                  "    if (loans.length > 0 && loans[0].lender) {",
+                  "        pm.expect(loans[0].lender.fullName).to.exist;",
+                  "    }",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "graphql",
+              "graphql": {
+                "query": "{\n  user(id: \"user-001\") {\n    id\n    fullName\n    email\n    lenderProfile {\n      totalLent\n      verified\n    }\n    loansAsBorrower {\n      id\n      amount\n      status\n      lender {\n        id\n        fullName\n      }\n    }\n  }\n}",
+                "variables": ""
+              }
+            },
+            "url": {
+              "raw": "{{GATEWAY}}",
+              "host": [
+                "{{GATEWAY}}"
+              ]
+            },
+            "description": "# 🔥 QUERY COMPLEJA MULTI-NIVEL\n\nEsta query atraviesa AMBOS servicios múltiples veces:\n\n```\nuser(id: \"user-001\")\n  │\n  ├─► fullName, email      → USERS SERVICE\n  ├─► lenderProfile        → USERS SERVICE\n  │\n  └─► loansAsBorrower      → LOANS SERVICE\n        │\n        └─► lender.fullName → USERS SERVICE (otra vez!)\n```\n\n**El Gateway hace TODO automáticamente:**\n- Parsea la query\n- Determina qué campos vienen de qué servicio\n- Ejecuta múltiples requests en paralelo\n- Combina las respuestas\n- Retorna UN solo JSON al cliente"
+          },
+          "response": []
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "USERS_SERVICE",
+      "value": "http://localhost:8081/graphql",
+      "type": "string"
+    },
+    {
+      "key": "LOANS_SERVICE",
+      "value": "http://localhost:8082/graphql",
+      "type": "string"
+    },
+    {
+      "key": "GATEWAY",
+      "value": "http://localhost:8080/graphql",
+      "type": "string"
+    }
+  ]
+}

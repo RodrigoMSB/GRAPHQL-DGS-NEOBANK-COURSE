@@ -1,538 +1,758 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
-##############################################################################
-# Script de Pruebas - Chapter 05: Apollo Federation
-# 
-# Este script verifica que los microservicios GraphQL federados estén
-# funcionando correctamente y exponga los conceptos de Apollo Federation.
+################################################################################
+# CHAPTER 05: APOLLO FEDERATION - P2P LENDING MARKETPLACE
+# Script de Testing Automatizado - VERSIÓN EDUCATIVA
 #
-# COMPATIBLE: Mac y Windows (Git Bash)
-##############################################################################
+# Compatible con:
+#   - macOS (Bash 3.2+)
+#   - Linux (Bash 4.0+)
+#   - Windows GitBash (Bash 4.4+)
+#
+# Uso: 
+#   ./test-chapter05.sh           (modo interactivo)
+#   ./test-chapter05.sh -s        (modo silencioso)
+################################################################################
 
-# ============================================================================
-# DETECCIÓN DE SISTEMA OPERATIVO
-# ============================================================================
+export LC_ALL=C
 
-detect_os() {
-    case "$(uname -s)" in
-        Darwin*)    echo "mac" ;;
-        Linux*)     echo "linux" ;;
-        MINGW*|MSYS*|CYGWIN*)    echo "windows" ;;
-        *)          echo "unknown" ;;
-    esac
-}
+# Colores
+GREEN='\033[0;32m'
+RED='\033[0;31m'
+YELLOW='\033[1;33m'
+MAGENTA='\033[1;35m'
+CYAN='\033[0;36m'
+BLUE='\033[0;34m'
+WHITE='\033[1;37m'
+GRAY='\033[0;90m'
+NC='\033[0m'
 
-OS_TYPE=$(detect_os)
+# Config
+USERS_URL="http://localhost:8081/graphql"
+LOANS_URL="http://localhost:8082/graphql"
+GATEWAY_URL="http://localhost:8080/graphql"
+OUTPUT_FILE="test-results-chapter05-$(date +%Y%m%d-%H%M%S).txt"
 
-# ============================================================================
-# CONFIGURACIÓN
-# ============================================================================
+INTERACTIVE=true
+if [ "$1" = "-s" ]; then
+    INTERACTIVE=false
+fi
 
-# Archivo de log con timestamp
-LOG_FILE="test-results-chapter05-$(date +%Y%m%d-%H%M%S).txt"
-
-# Contadores de pruebas
 TOTAL_TESTS=0
 PASSED_TESTS=0
 FAILED_TESTS=0
 
-# URLs de servicios
-USERS_URL="http://localhost:8081/graphql"
-LOANS_URL="http://localhost:8082/graphql"
-
-# Función para escribir en terminal y archivo
-log_both() {
-    echo -e "$1"
-    echo -e "$1" | sed 's/\x1B\[[0-9;]*[JKmsu]//g' >> "$LOG_FILE"
+print_colored() {
+    printf "%b\n" "$1" | tee -a "$OUTPUT_FILE"
 }
 
-# Colores
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-CYAN='\033[0;36m'
-MAGENTA='\033[0;35m'
-NC='\033[0m'
-
-# Función para pausar (compatible con ambos sistemas)
-pause_script() {
-    echo ""
-    read -p "Presiona ENTER para continuar..." dummy
-    echo ""
-}
-
-# Función para formatear JSON (con jq o fallback)
-format_json() {
-    if command -v jq &> /dev/null; then
-        echo "$1" | jq '.'
+pause() {
+    if [ "$INTERACTIVE" = true ]; then
+        print_colored "${YELLOW}⏸️  Presiona Enter para continuar...${NC}"
+        read -r
     else
-        echo "$1"
+        sleep 0.5
     fi
 }
 
-# Función para ejecutar query GraphQL
-execute_query() {
-    local service_url=$1
-    local query=$2
-    
-    curl -s -X POST "$service_url" \
-        -H "Content-Type: application/json" \
-        -d @- <<EOF
-{"query":"$query"}
-EOF
+log() {
+    print_colored "$1"
 }
 
-log_both "${CYAN}╔═══════════════════════════════════════════════════════════╗${NC}"
-log_both "${CYAN}║    🚀  CHAPTER 05: APOLLO FEDERATION                     ║${NC}"
-log_both "${CYAN}║    P2P Lending con Netflix DGS Framework                  ║${NC}"
-log_both "${CYAN}╚═══════════════════════════════════════════════════════════╝${NC}"
-log_both ""
-log_both "${GREEN}🖥️  Sistema Operativo: ${OS_TYPE}${NC}"
-log_both "${GREEN}📄 Los resultados se guardarán en: ${LOG_FILE}${NC}"
-log_both ""
+print_section() {
+    log ""
+    log "${CYAN}================================================================================${NC}"
+    log "${CYAN}$1${NC}"
+    log "${CYAN}================================================================================${NC}"
+    log ""
+}
 
-##############################################################################
-# VERIFICACIÓN DE SERVICIOS
-##############################################################################
-log_both "${BLUE}═══════════════════════════════════════════════════════════${NC}"
-log_both "${YELLOW}🔍 VERIFICACIÓN: Servicios activos${NC}"
-log_both "${BLUE}═══════════════════════════════════════════════════════════${NC}"
-log_both ""
+print_subsection() {
+    log ""
+    log "${MAGENTA}────────────────────────────────────────────────────────────────────────────${NC}"
+    log "${MAGENTA}$1${NC}"
+    log "${MAGENTA}────────────────────────────────────────────────────────────────────────────${NC}"
+}
 
-SERVICIOS_OK=true
+print_schema() {
+    log ""
+    log "${WHITE}📐 SCHEMA:${NC}"
+    log "${GRAY}$1${NC}"
+    log ""
+}
 
-# Verificar Users Service (8081)
-log_both "Verificando Users Service (Puerto 8081)..."
-if curl -s -X POST "$USERS_URL" -H "Content-Type: application/json" -d '{"query":"{__typename}"}' > /dev/null 2>&1; then
-    log_both "${GREEN}✅ Users Service: OK${NC}"
-else
-    log_both "${RED}❌ Users Service: NO RESPONDE${NC}"
-    SERVICIOS_OK=false
-fi
+print_java() {
+    log "${WHITE}☕ JAVA (implementación):${NC}"
+    log "${GRAY}$1${NC}"
+    log ""
+}
 
-# Verificar Loans Service (8082)
-log_both "Verificando Loans Service (Puerto 8082)..."
-if curl -s -X POST "$LOANS_URL" -H "Content-Type: application/json" -d '{"query":"{__typename}"}' > /dev/null 2>&1; then
-    log_both "${GREEN}✅ Loans Service: OK${NC}"
-else
-    log_both "${RED}❌ Loans Service: NO RESPONDE${NC}"
-    SERVICIOS_OK=false
-fi
+# Función para ejecutar tests con REQUEST y BODY visibles y formateados
+run_graphql_test() {
+    local test_name="$1"
+    local service_url="$2"
+    local service_name="$3"
+    local graphql_query="$4"
+    local validation="$5"
+    
+    TOTAL_TESTS=$((TOTAL_TESTS + 1))
+    
+    log "${YELLOW}🧪 Test #${TOTAL_TESTS}: ${test_name}${NC}"
+    log ""
+    
+    # Mostrar el REQUEST
+    log "${BLUE}📤 REQUEST:${NC}"
+    log "${WHITE}   POST ${service_url}${NC}"
+    log "${WHITE}   Content-Type: application/json${NC}"
+    log "${WHITE}   Service: ${service_name}${NC}"
+    log ""
+    
+    # Mostrar el BODY JSON formateado correctamente
+    local display_query
+    display_query=$(echo "$graphql_query" | sed 's/\\"/"/g')
+    
+    log "${BLUE}📋 BODY:${NC}"
+    log "${GRAY}   {${NC}"
+    log "${GRAY}     \"query\": \"${CYAN}${display_query}${GRAY}\"${NC}"
+    log "${GRAY}   }${NC}"
+    log ""
+    
+    # Ejecutar curl
+    log "${BLUE}⚡ Ejecutando...${NC}"
+    response=$(curl -s -X POST "${service_url}" \
+        -H "Content-Type: application/json" \
+        -d "{\"query\":\"$graphql_query\"}" 2>&1)
+    exit_code=$?
+    
+    # Mostrar respuesta formateada
+    log ""
+    log "${BLUE}📥 RESPONSE:${NC}"
+    if command -v jq >/dev/null 2>&1; then
+        formatted=$(echo "$response" | jq '.' 2>/dev/null || echo "$response")
+        echo "$formatted" | while IFS= read -r line; do
+            log "${GREEN}   $line${NC}"
+        done
+    else
+        log "${GREEN}   $response${NC}"
+    fi
+    
+    log ""
+    
+    # Validar
+    if [ $exit_code -eq 0 ] && echo "$response" | grep -qE "$validation"; then
+        log "${GREEN}   ✅ PASSED${NC}"
+        PASSED_TESTS=$((PASSED_TESTS + 1))
+    else
+        log "${RED}   ❌ FAILED${NC}"
+        log "${RED}   Expected pattern: $validation${NC}"
+        FAILED_TESTS=$((FAILED_TESTS + 1))
+    fi
+    
+    log ""
+    pause
+}
 
-log_both ""
+check_services() {
+    log "${YELLOW}🔍 Verificando que los servicios estén corriendo...${NC}"
+    log ""
+    
+    local all_ok=true
+    
+    # Users Service
+    if curl -s -X POST "$USERS_URL" -H "Content-Type: application/json" -d '{"query":"{__typename}"}' > /dev/null 2>&1; then
+        log "${GREEN}   ✅ Users Service (8081): OK${NC}"
+    else
+        log "${RED}   ❌ Users Service (8081): NO RESPONDE${NC}"
+        all_ok=false
+    fi
+    
+    # Loans Service
+    if curl -s -X POST "$LOANS_URL" -H "Content-Type: application/json" -d '{"query":"{__typename}"}' > /dev/null 2>&1; then
+        log "${GREEN}   ✅ Loans Service (8082): OK${NC}"
+    else
+        log "${RED}   ❌ Loans Service (8082): NO RESPONDE${NC}"
+        all_ok=false
+    fi
+    
+    log ""
+    
+    if [ "$all_ok" = false ]; then
+        log "${RED}❌ ERROR: Algunos servicios no están activos.${NC}"
+        log "${YELLOW}Por favor ejecuta:${NC}"
+        log "${WHITE}   cd ch05-p2p-lending-federation${NC}"
+        log "${WHITE}   docker-compose up -d --build${NC}"
+        log ""
+        exit 1
+    fi
+    
+    log "${GREEN}✅ Todos los servicios están activos!${NC}"
+    log ""
+}
 
-if [ "$SERVICIOS_OK" = false ]; then
-    log_both "${RED}⚠️  ERROR: Algunos servicios no están activos.${NC}"
-    log_both "${YELLOW}Por favor, asegúrate de que los servicios estén corriendo:${NC}"
-    log_both "  docker-compose up -d"
-    log_both ""
-    exit 1
-fi
+################################################################################
+# HEADER
+################################################################################
 
-log_both "${GREEN}✅ Todos los servicios están activos. Iniciando pruebas...${NC}"
-log_both ""
-pause_script
-log_both ""
+clear
+log "${CYAN}╔══════════════════════════════════════════════════════════════════════════════╗${NC}"
+log "${CYAN}║                                                                              ║${NC}"
+log "${CYAN}║        📘 CHAPTER 05: APOLLO FEDERATION - P2P LENDING                       ║${NC}"
+log "${CYAN}║                     Testing Automatizado Completo                            ║${NC}"
+log "${CYAN}║                                                                              ║${NC}"
+log "${CYAN}╚══════════════════════════════════════════════════════════════════════════════╝${NC}"
+log ""
+log "${YELLOW}Feature: P2P Lending Marketplace (Préstamos entre Personas)${NC}"
+log "${YELLOW}Arquitectura: Apollo Federation con 2 Subgrafos${NC}"
+log "${YELLOW}Duración: 1.75 horas${NC}"
+log "${YELLOW}Log: ${OUTPUT_FILE}${NC}"
+log ""
 
-##############################################################################
-# PRUEBA 1: Query all users (Users Service)
-##############################################################################
-log_both "${BLUE}═══════════════════════════════════════════════════════════${NC}"
-log_both "${YELLOW}📋 PRUEBA 1: Query all users (Subgrafo Users)${NC}"
-log_both "${BLUE}═══════════════════════════════════════════════════════════${NC}"
-log_both ""
-log_both "🎯 Objetivo: Verificar que Users Service retorna lista de usuarios"
-log_both "🏢 Servicio: Users Service (8081)"
-log_both "📊 Entidad: User (OWNER)"
-log_both ""
-log_both "${CYAN}📤 REQUEST (GraphQL):${NC}"
-log_both "{ users { id fullName email userType } }"
-log_both ""
-log_both "${CYAN}Ejecutando query...${NC}"
-log_both ""
+check_services
+pause
 
-TOTAL_TESTS=$((TOTAL_TESTS + 1))
+################################################################################
+# SECCIÓN 5.1 - INTRODUCCIÓN A APOLLO FEDERATION
+################################################################################
 
-RESPONSE=$(execute_query "$USERS_URL" "{ users { id fullName email userType } }")
+print_section "SECCIÓN 5.1 — ¿QUÉ ES APOLLO FEDERATION?"
 
-log_both "${CYAN}📥 RESPONSE:${NC}"
-log_both "$(format_json "$RESPONSE")"
-log_both ""
+log "${WHITE}┌─────────────────────────────────────────────────────────────────────────────┐${NC}"
+log "${WHITE}│  🎯 OBJETIVO DE ESTA SECCIÓN                                               │${NC}"
+log "${WHITE}│                                                                             │${NC}"
+log "${WHITE}│  Entender por qué necesitamos Federation y cómo funciona.                  │${NC}"
+log "${WHITE}│                                                                             │${NC}"
+log "${WHITE}│  PROBLEMA: Schema monolítico gigante                                       │${NC}"
+log "${WHITE}│  ┌─────────────────────────────────────┐                                   │${NC}"
+log "${WHITE}│  │  UN SOLO SERVIDOR GRAPHQL           │                                   │${NC}"
+log "${WHITE}│  │  • 500+ tipos                       │                                   │${NC}"
+log "${WHITE}│  │  • 50 desarrolladores               │  ← Caos, conflictos, bloqueos    │${NC}"
+log "${WHITE}│  │  • Un deploy rompe todo             │                                   │${NC}"
+log "${WHITE}│  └─────────────────────────────────────┘                                   │${NC}"
+log "${WHITE}│                                                                             │${NC}"
+log "${WHITE}│  SOLUCIÓN: Federation - Dividir en microservicios                          │${NC}"
+log "${WHITE}│                                                                             │${NC}"
+log "${WHITE}│                    ┌─────────────────────┐                                 │${NC}"
+log "${WHITE}│                    │   Apollo Gateway    │  ← UN endpoint para clientes   │${NC}"
+log "${WHITE}│                    └──────────┬──────────┘                                 │${NC}"
+log "${WHITE}│              ┌────────────────┼────────────────┐                           │${NC}"
+log "${WHITE}│              ▼                ▼                ▼                           │${NC}"
+log "${WHITE}│      ┌─────────────┐  ┌─────────────┐  ┌─────────────┐                    │${NC}"
+log "${WHITE}│      │Users Service│  │Loans Service│  │Pay Service  │                    │${NC}"
+log "${WHITE}│      │ (Equipo A)  │  │ (Equipo B)  │  │ (Equipo C)  │                    │${NC}"
+log "${WHITE}│      └─────────────┘  └─────────────┘  └─────────────┘                    │${NC}"
+log "${WHITE}│                                                                             │${NC}"
+log "${WHITE}│  BENEFICIOS:                                                               │${NC}"
+log "${WHITE}│  ✅ Cada equipo maneja su servicio                                         │${NC}"
+log "${WHITE}│  ✅ Deploy independiente                                                   │${NC}"
+log "${WHITE}│  ✅ Escalar por servicio                                                   │${NC}"
+log "${WHITE}└─────────────────────────────────────────────────────────────────────────────┘${NC}"
+log ""
+pause
 
-if echo "$RESPONSE" | grep -q "user-001" && echo "$RESPONSE" | grep -q "Alice Thompson"; then
-    log_both "${GREEN}✅ PASSED: Query users retorna lista correctamente${NC}"
-    PASSED_TESTS=$((PASSED_TESTS + 1))
-else
-    log_both "${RED}❌ FAILED: Data esperada no encontrada${NC}"
-    FAILED_TESTS=$((FAILED_TESTS + 1))
-fi
-log_both ""
-pause_script
-log_both ""
+# Test 1: Query básica a Users Service
+print_subsection "Test 1: Query al Subgrafo USERS - Lista de usuarios"
 
-##############################################################################
-# PRUEBA 2: Query single user by ID
-##############################################################################
-log_both "${BLUE}═══════════════════════════════════════════════════════════${NC}"
-log_both "${YELLOW}📋 PRUEBA 2: Query single user by ID${NC}"
-log_both "${BLUE}═══════════════════════════════════════════════════════════${NC}"
-log_both ""
-log_both "🎯 Objetivo: Verificar query con argumentos"
-log_both "🏢 Servicio: Users Service (8081)"
-log_both "🔑 Argumento: id = \"user-001\""
-log_both ""
-log_both "${CYAN}📤 REQUEST (GraphQL):${NC}"
-log_both "{ user(id: \"user-001\") { id fullName email reputation } }"
-log_both ""
-log_both "${CYAN}Ejecutando query...${NC}"
-log_both ""
+print_schema "   ┌─────────────────────────────────────────────────────────────────────┐
+   │  # users-schema.graphqls (Users Service - Puerto 8081)             │
+   │  # Este servicio es OWNER del tipo User                            │
+   │                                                                     │
+   │  extend schema                                                      │
+   │    @link(url: \"https://specs.apollo.dev/federation/v2.3\",          │
+   │          import: [\"@key\", \"@shareable\"])                           │
+   │                                                                     │
+   │  \"\"\"                                                               │
+   │  User - Entidad principal del dominio Users                        │
+   │  Marcada con @key para permitir referencias desde otros subgrafos  │
+   │  \"\"\"                                                               │
+   │  type User @key(fields: \"id\") {      ← ENTIDAD FEDERADA           │
+   │    id: ID!                            ← Campo clave (@key)         │
+   │    email: String!                                                  │
+   │    fullName: String!                                               │
+   │    userType: UserType!                # LENDER | BORROWER | BOTH   │
+   │    lenderProfile: LenderProfile                                    │
+   │    borrowerProfile: BorrowerProfile                                │
+   │    reputation: Float!                                              │
+   │  }                                                                 │
+   │                                                                     │
+   │  type Query {                                                       │
+   │    user(id: ID!): User                                             │
+   │    users: [User!]!                    ← ESTA QUERY                 │
+   │    verifiedLenders: [User!]!                                       │
+   │  }                                                                 │
+   └─────────────────────────────────────────────────────────────────────┘"
 
-TOTAL_TESTS=$((TOTAL_TESTS + 1))
+run_graphql_test "Query users - Subgrafo Users" \
+    "$USERS_URL" \
+    "Users Service (8081)" \
+    '{ users { id fullName email userType } }' \
+    'user-001.*Alice'
 
-RESPONSE=$(execute_query "$USERS_URL" "{ user(id: \\\"user-001\\\") { id fullName email reputation } }")
+# Test 2: Query por ID
+print_subsection "Test 2: Query User por ID con argumentos"
 
-log_both "${CYAN}📥 RESPONSE:${NC}"
-log_both "$(format_json "$RESPONSE")"
-log_both ""
+print_schema "   ┌─────────────────────────────────────────────────────────────────────┐
+   │  # users-schema.graphqls                                           │
+   │                                                                     │
+   │  type Query {                                                       │
+   │    user(id: ID!): User                ← ESTA QUERY (con argumento) │
+   │    users: [User!]!                                                 │
+   │    verifiedLenders: [User!]!                                       │
+   │  }                                                                 │
+   │                                                                     │
+   │  # IMPORTANTE: Este servicio SOLO conoce Users.                    │
+   │  # No tiene acceso a Loans - cada subgrafo es independiente.       │
+   └─────────────────────────────────────────────────────────────────────┘"
 
-if echo "$RESPONSE" | grep -q "Alice Thompson"; then
-    log_both "${GREEN}✅ PASSED: Usuario individual retornado correctamente${NC}"
-    PASSED_TESTS=$((PASSED_TESTS + 1))
-else
-    log_both "${RED}❌ FAILED: Usuario no encontrado${NC}"
-    FAILED_TESTS=$((FAILED_TESTS + 1))
-fi
-log_both ""
-pause_script
-log_both ""
+run_graphql_test "Query user por ID" \
+    "$USERS_URL" \
+    "Users Service (8081)" \
+    '{ user(id: \"user-001\") { id fullName email reputation } }' \
+    'Alice Thompson'
 
-##############################################################################
-# PRUEBA 3: Query verified lenders
-##############################################################################
-log_both "${BLUE}═══════════════════════════════════════════════════════════${NC}"
-log_both "${YELLOW}📋 PRUEBA 3: Query verified lenders${NC}"
-log_both "${BLUE}═══════════════════════════════════════════════════════════${NC}"
-log_both ""
-log_both "🎯 Objetivo: Verificar query con objetos anidados (LenderProfile)"
-log_both "🏢 Servicio: Users Service (8081)"
-log_both "📊 Relación: User → LenderProfile"
-log_both ""
-log_both "${CYAN}📤 REQUEST (GraphQL):${NC}"
-log_both "{ verifiedLenders { id fullName lenderProfile { verified totalLent } } }"
-log_both ""
-log_both "${CYAN}Ejecutando query...${NC}"
-log_both ""
+################################################################################
+# SECCIÓN 5.2 - DIRECTIVA @KEY (ENTIDADES FEDERADAS)
+################################################################################
 
-TOTAL_TESTS=$((TOTAL_TESTS + 1))
+print_section "SECCIÓN 5.2 — DIRECTIVA @key: ENTIDADES FEDERADAS"
 
-RESPONSE=$(execute_query "$USERS_URL" "{ verifiedLenders { id fullName lenderProfile { verified totalLent } } }")
+log "${WHITE}┌─────────────────────────────────────────────────────────────────────────────┐${NC}"
+log "${WHITE}│  🎯 OBJETIVO DE ESTA SECCIÓN                                               │${NC}"
+log "${WHITE}│                                                                             │${NC}"
+log "${WHITE}│  Entender la directiva @key que marca entidades federadas.                 │${NC}"
+log "${WHITE}│                                                                             │${NC}"
+log "${WHITE}│  ¿QUÉ ES @key?                                                             │${NC}"
+log "${WHITE}│  Marca un tipo como \"entidad\" que puede ser referenciada desde otros      │${NC}"
+log "${WHITE}│  servicios. Es como el \"pasaporte\" del tipo.                              │${NC}"
+log "${WHITE}│                                                                             │${NC}"
+log "${WHITE}│  ANALOGÍA:                                                                 │${NC}"
+log "${WHITE}│  @key es como el número de pasaporte de una persona.                       │${NC}"
+log "${WHITE}│  No importa en qué país estés, con ese número te identifican.              │${NC}"
+log "${WHITE}│  En Federation, @key permite que otros servicios \"encuentren\"             │${NC}"
+log "${WHITE}│  la entidad usando solo su identificador.                                  │${NC}"
+log "${WHITE}└─────────────────────────────────────────────────────────────────────────────┘${NC}"
+log ""
+pause
 
-log_both "${CYAN}📥 RESPONSE:${NC}"
-log_both "$(format_json "$RESPONSE")"
-log_both ""
+# Test 3: Objetos anidados
+print_subsection "Test 3: Query con tipos anidados (LenderProfile)"
 
-if echo "$RESPONSE" | grep -q "verifiedLenders" && echo "$RESPONSE" | grep -q "totalLent"; then
-    log_both "${GREEN}✅ PASSED: Lenders verificados retornados correctamente${NC}"
-    PASSED_TESTS=$((PASSED_TESTS + 1))
-else
-    log_both "${RED}❌ FAILED: Lenders no encontrados${NC}"
-    FAILED_TESTS=$((FAILED_TESTS + 1))
-fi
-log_both ""
-pause_script
-log_both ""
+print_schema "   ┌─────────────────────────────────────────────────────────────────────┐
+   │  # users-schema.graphqls                                           │
+   │                                                                     │
+   │  type User @key(fields: \"id\") {                                    │
+   │    id: ID!                                                         │
+   │    fullName: String!                                               │
+   │    lenderProfile: LenderProfile       ← TIPO ANIDADO              │
+   │    borrowerProfile: BorrowerProfile   ← TIPO ANIDADO              │
+   │  }                                                                 │
+   │                                                                     │
+   │  \"\"\"                                                               │
+   │  Perfil de prestamista (Lender)                                    │
+   │  NOTA: NO tiene @key - NO es entidad federada                      │
+   │  Solo Users Service puede resolver este tipo                       │
+   │  \"\"\"                                                               │
+   │  type LenderProfile {                                              │
+   │    totalLent: Float!                  # Total prestado             │
+   │    activeLoans: Int!                  # Préstamos activos          │
+   │    averageReturn: Float!              # Retorno promedio           │
+   │    riskTolerance: RiskTolerance!      # CONSERVATIVE|MODERATE|AGG  │
+   │    verified: Boolean!                 # ¿Verificado?               │
+   │  }                                                                 │
+   │                                                                     │
+   │  type Query {                                                       │
+   │    verifiedLenders: [User!]!          ← ESTA QUERY                 │
+   │  }                                                                 │
+   └─────────────────────────────────────────────────────────────────────┘"
 
-##############################################################################
-# PRUEBA 4: Entity fetcher (_entities)
-##############################################################################
-log_both "${BLUE}═══════════════════════════════════════════════════════════${NC}"
-log_both "${YELLOW}📋 PRUEBA 4: Entity Resolution (_entities query)${NC}"
-log_both "${BLUE}═══════════════════════════════════════════════════════════${NC}"
-log_both ""
-log_both "🎯 Objetivo: Verificar que User es entidad federada (@key)"
-log_both "🏢 Servicio: Users Service (8081)"
-log_both "🔑 Concepto: Entity Resolution de Apollo Federation"
-log_both "📐 Directiva: @key(fields: \"id\")"
-log_both ""
-log_both "${CYAN}📤 REQUEST (GraphQL):${NC}"
-log_both "{ _entities(representations: [{__typename: \"User\", id: \"user-001\"}]) {"
-log_both "    ... on User { id fullName }"
-log_both "  }"
-log_both "}"
-log_both ""
-log_both "${CYAN}Ejecutando query...${NC}"
-log_both ""
+run_graphql_test "Query verifiedLenders con LenderProfile" \
+    "$USERS_URL" \
+    "Users Service (8081)" \
+    '{ verifiedLenders { id fullName lenderProfile { verified totalLent activeLoans } } }' \
+    'verifiedLenders.*totalLent'
 
-TOTAL_TESTS=$((TOTAL_TESTS + 1))
+# Test 4: Entity Resolution (_entities)
+print_subsection "Test 4: Entity Resolution con _entities query"
 
-RESPONSE=$(execute_query "$USERS_URL" "{ _entities(representations: [{__typename: \\\"User\\\", id: \\\"user-001\\\"}]) { ... on User { id fullName } } }")
+print_schema "   ┌─────────────────────────────────────────────────────────────────────┐
+   │  # QUERY ESPECIAL DE FEDERATION: _entities                         │
+   │  #                                                                  │
+   │  # Esta query NO la defines tú - Apollo Federation la genera       │
+   │  # automáticamente para cada tipo marcado con @key                 │
+   │                                                                     │
+   │  type Query {                                                       │
+   │    # Queries normales que defines tú:                              │
+   │    user(id: ID!): User                                             │
+   │    users: [User!]!                                                 │
+   │                                                                     │
+   │    # Query GENERADA por Federation (no aparece en tu schema):      │
+   │    _entities(representations: [_Any!]!): [_Entity]!                │
+   │  }                                                                 │
+   │                                                                     │
+   │  # ¿CÓMO FUNCIONA?                                                  │
+   │  # 1. Loans Service retorna stub: {__typename:\"User\", id:\"001\"}  │
+   │  # 2. Gateway detecta que User pertenece a Users Service           │
+   │  # 3. Gateway llama: _entities(representations: [{...}])           │
+   │  # 4. Users Service resuelve y retorna User completo               │
+   └─────────────────────────────────────────────────────────────────────┘"
 
-log_both "${CYAN}📥 RESPONSE:${NC}"
-log_both "$(format_json "$RESPONSE")"
-log_both ""
+print_java "   @DgsEntityFetcher(name = \"User\")           // Resuelve User por @key
+   public User resolveUser(Map<String, Object> values) {
+       String id = (String) values.get(\"id\");  // Extrae el campo @key
+       return usersService.getUserById(id);
+   }"
 
-if echo "$RESPONSE" | grep -q "Alice Thompson"; then
-    log_both "${GREEN}✅ PASSED: Entity fetcher funciona - User es entidad federada${NC}"
-    PASSED_TESTS=$((PASSED_TESTS + 1))
-else
-    log_both "${RED}❌ FAILED: Entity no resuelta${NC}"
-    FAILED_TESTS=$((FAILED_TESTS + 1))
-fi
-log_both ""
-pause_script
-log_both ""
+run_graphql_test "Entity Resolution - _entities query" \
+    "$USERS_URL" \
+    "Users Service (8081)" \
+    '{ _entities(representations: [{__typename: \"User\", id: \"user-001\"}]) { ... on User { id fullName email } } }' \
+    'Alice Thompson'
 
-##############################################################################
-# PRUEBA 5: Query all loans (Loans Service)
-##############################################################################
-log_both "${BLUE}═══════════════════════════════════════════════════════════${NC}"
-log_both "${YELLOW}📋 PRUEBA 5: Query all loans (Subgrafo Loans)${NC}"
-log_both "${BLUE}═══════════════════════════════════════════════════════════${NC}"
-log_both ""
-log_both "🎯 Objetivo: Verificar que Loans Service retorna lista de préstamos"
-log_both "🏢 Servicio: Loans Service (8082)"
-log_both "📊 Entidad: Loan (OWNER)"
-log_both ""
-log_both "${CYAN}📤 REQUEST (GraphQL):${NC}"
-log_both "{ loans { id amount status purpose } }"
-log_both ""
-log_both "${CYAN}Ejecutando query...${NC}"
-log_both ""
+################################################################################
+# SECCIÓN 5.3 - SEGUNDO SUBGRAFO: LOANS SERVICE
+################################################################################
 
-TOTAL_TESTS=$((TOTAL_TESTS + 1))
+print_section "SECCIÓN 5.3 — SEGUNDO SUBGRAFO: LOANS SERVICE"
 
-RESPONSE=$(execute_query "$LOANS_URL" "{ loans { id amount status purpose } }")
+log "${WHITE}┌─────────────────────────────────────────────────────────────────────────────┐${NC}"
+log "${WHITE}│  🎯 OBJETIVO DE ESTA SECCIÓN                                               │${NC}"
+log "${WHITE}│                                                                             │${NC}"
+log "${WHITE}│  Entender cómo el segundo subgrafo define sus propios tipos.               │${NC}"
+log "${WHITE}│                                                                             │${NC}"
+log "${WHITE}│  ARQUITECTURA DE PUERTOS:                                                  │${NC}"
+log "${WHITE}│                                                                             │${NC}"
+log "${WHITE}│  ┌─────────────────────────────────────────────────────────────────┐       │${NC}"
+log "${WHITE}│  │  Users Service    →  Puerto 8081  →  Owner de User            │       │${NC}"
+log "${WHITE}│  │  Loans Service    →  Puerto 8082  →  Owner de Loan            │       │${NC}"
+log "${WHITE}│  │  Gateway          →  Puerto 8080  →  Unifica ambos            │       │${NC}"
+log "${WHITE}│  └─────────────────────────────────────────────────────────────────┘       │${NC}"
+log "${WHITE}│                                                                             │${NC}"
+log "${WHITE}│  Cada servicio es COMPLETAMENTE INDEPENDIENTE:                             │${NC}"
+log "${WHITE}│  • Base de datos propia                                                    │${NC}"
+log "${WHITE}│  • Deploy propio                                                           │${NC}"
+log "${WHITE}│  • Equipo propio                                                           │${NC}"
+log "${WHITE}└─────────────────────────────────────────────────────────────────────────────┘${NC}"
+log ""
+pause
 
-log_both "${CYAN}📥 RESPONSE:${NC}"
-log_both "$(format_json "$RESPONSE")"
-log_both ""
+# Test 5: Query al Loans Service
+print_subsection "Test 5: Query al Subgrafo LOANS - Lista de préstamos"
 
-if echo "$RESPONSE" | grep -q "loan-001" && echo "$RESPONSE" | grep -q "ACTIVE"; then
-    log_both "${GREEN}✅ PASSED: Query loans retorna lista correctamente${NC}"
-    PASSED_TESTS=$((PASSED_TESTS + 1))
-else
-    log_both "${RED}❌ FAILED: Data esperada no encontrada${NC}"
-    FAILED_TESTS=$((FAILED_TESTS + 1))
-fi
-log_both ""
-pause_script
-log_both ""
+print_schema "   ┌─────────────────────────────────────────────────────────────────────┐
+   │  # loans-schema.graphqls (Loans Service - Puerto 8082)             │
+   │  # Este servicio es OWNER del tipo Loan                            │
+   │                                                                     │
+   │  extend schema                                                      │
+   │    @link(url: \"https://specs.apollo.dev/federation/v2.3\",          │
+   │          import: [\"@key\", \"@external\", \"@extends\"])               │
+   │                                                                     │
+   │  \"\"\"                                                               │
+   │  Loan - Entidad principal del dominio Loans (P2P Lending)          │
+   │  \"\"\"                                                               │
+   │  type Loan @key(fields: \"id\") {      ← ENTIDAD FEDERADA           │
+   │    id: ID!                                                         │
+   │    amount: Float!                     # Monto del préstamo         │
+   │    interestRate: Float!               # Tasa de interés anual      │
+   │    term: Int!                         # Plazo en meses             │
+   │    status: LoanStatus!                # Estado del préstamo        │
+   │    purpose: String!                   # Para qué es                │
+   │    lender: User                       # Prestamista (nullable)     │
+   │    borrower: User!                    # Prestatario                │
+   │    monthlyPayment: Float!             # Cuota mensual              │
+   │  }                                                                 │
+   │                                                                     │
+   │  type Query {                                                       │
+   │    loans: [Loan!]!                    ← ESTA QUERY                 │
+   │    loan(id: ID!): Loan                                             │
+   │    loansByStatus(status: LoanStatus!): [Loan!]!                    │
+   │  }                                                                 │
+   └─────────────────────────────────────────────────────────────────────┘"
 
-##############################################################################
-# PRUEBA 6: Query loans by status
-##############################################################################
-log_both "${BLUE}═══════════════════════════════════════════════════════════${NC}"
-log_both "${YELLOW}📋 PRUEBA 6: Query loans by status (Filtro con enum)${NC}"
-log_both "${BLUE}═══════════════════════════════════════════════════════════${NC}"
-log_both ""
-log_both "🎯 Objetivo: Verificar filtrado por enum LoanStatus"
-log_both "🏢 Servicio: Loans Service (8082)"
-log_both "🔍 Filtro: status = ACTIVE"
-log_both ""
-log_both "${CYAN}📤 REQUEST (GraphQL):${NC}"
-log_both "{ loansByStatus(status: ACTIVE) { id status } }"
-log_both ""
-log_both "${CYAN}Ejecutando query...${NC}"
-log_both ""
+run_graphql_test "Query loans - Subgrafo Loans" \
+    "$LOANS_URL" \
+    "Loans Service (8082)" \
+    '{ loans { id amount status purpose interestRate term } }' \
+    'loan-001.*ACTIVE'
 
-TOTAL_TESTS=$((TOTAL_TESTS + 1))
+# Test 6: Filtro por Enum
+print_subsection "Test 6: Query con filtro por Enum (LoanStatus)"
 
-RESPONSE=$(execute_query "$LOANS_URL" "{ loansByStatus(status: ACTIVE) { id status } }")
+print_schema "   ┌─────────────────────────────────────────────────────────────────────┐
+   │  # loans-schema.graphqls                                           │
+   │                                                                     │
+   │  enum LoanStatus {                                                 │
+   │    PENDING       # Esperando financiamiento (sin lender)           │
+   │    FUNDED        # Financiado, esperando activación                │
+   │    ACTIVE        # Préstamo activo, pagos en curso                 │
+   │    COMPLETED     # Pagado completamente                            │
+   │    DEFAULTED     # Incumplimiento de pago                          │
+   │  }                                                                 │
+   │                                                                     │
+   │  type Query {                                                       │
+   │    loans: [Loan!]!                                                 │
+   │    loansByStatus(status: LoanStatus!): [Loan!]!  ← ESTA QUERY     │
+   │    availableLoans: [Loan!]!           # Shortcut: solo PENDING     │
+   │  }                                                                 │
+   └─────────────────────────────────────────────────────────────────────┘"
 
-log_both "${CYAN}📥 RESPONSE:${NC}"
-log_both "$(format_json "$RESPONSE")"
-log_both ""
+run_graphql_test "Query loans filtrado por status ACTIVE" \
+    "$LOANS_URL" \
+    "Loans Service (8082)" \
+    '{ loansByStatus(status: ACTIVE) { id amount status } }' \
+    'ACTIVE'
 
-if echo "$RESPONSE" | grep -q "ACTIVE"; then
-    log_both "${GREEN}✅ PASSED: Filtro por status funciona correctamente${NC}"
-    PASSED_TESTS=$((PASSED_TESTS + 1))
-else
-    log_both "${RED}❌ FAILED: Filtro no funciona${NC}"
-    FAILED_TESTS=$((FAILED_TESTS + 1))
-fi
-log_both ""
-pause_script
-log_both ""
+################################################################################
+# SECCIÓN 5.4 - DIRECTIVA @EXTENDS (EXTENDER TIPOS)
+################################################################################
 
-##############################################################################
-# PRUEBA 7: Referencias entre subgrafos (User stubs)
-##############################################################################
-log_both "${BLUE}═══════════════════════════════════════════════════════════${NC}"
-log_both "${YELLOW}📋 PRUEBA 7: Referencias entre subgrafos (User stubs)${NC}"
-log_both "${BLUE}═══════════════════════════════════════════════════════════${NC}"
-log_both ""
-log_both "🎯 Objetivo: Verificar que Loan referencia a User (otro subgrafo)"
-log_both "🏢 Servicio: Loans Service (8082)"
-log_both "🔗 Concepto: Referencias entre subgrafos con stubs"
-log_both "📐 Patrón: Retornar {__typename: \"User\", id: \"...\"}  para entity resolution"
-log_both ""
-log_both "${CYAN}📤 REQUEST (GraphQL):${NC}"
-log_both "{ loans { id borrower { id } lender { id } } }"
-log_both ""
-log_both "${CYAN}Ejecutando query...${NC}"
-log_both ""
+print_section "SECCIÓN 5.4 — DIRECTIVA @extends: EXTENDER TIPOS DE OTROS SERVICIOS"
 
-TOTAL_TESTS=$((TOTAL_TESTS + 1))
+log "${WHITE}┌─────────────────────────────────────────────────────────────────────────────┐${NC}"
+log "${WHITE}│  🎯 OBJETIVO DE ESTA SECCIÓN                                               │${NC}"
+log "${WHITE}│                                                                             │${NC}"
+log "${WHITE}│  Entender cómo un servicio AGREGA CAMPOS a tipos de otro servicio.         │${NC}"
+log "${WHITE}│                                                                             │${NC}"
+log "${WHITE}│  DIRECTIVAS CLAVE:                                                         │${NC}"
+log "${WHITE}│  ┌─────────────────────────────────────────────────────────────────┐       │${NC}"
+log "${WHITE}│  │  @extends   \"Voy a extender un tipo que NO es mío\"             │       │${NC}"
+log "${WHITE}│  │  @external  \"Este campo ya existe en otro servicio\"            │       │${NC}"
+log "${WHITE}│  └─────────────────────────────────────────────────────────────────┘       │${NC}"
+log "${WHITE}│                                                                             │${NC}"
+log "${WHITE}│  ANALOGÍA:                                                                 │${NC}"
+log "${WHITE}│  Es como agregar una extensión a una casa que no construiste.              │${NC}"
+log "${WHITE}│  La casa original (User) la hizo Users Service.                            │${NC}"
+log "${WHITE}│  Loans Service le agrega un \"cuarto nuevo\" (loansAsLender).               │${NC}"
+log "${WHITE}└─────────────────────────────────────────────────────────────────────────────┘${NC}"
+log ""
+pause
 
-RESPONSE=$(execute_query "$LOANS_URL" "{ loans { id borrower { id } lender { id } } }")
+# Test 7: Referencias entre subgrafos (Stubs)
+print_subsection "Test 7: Referencias entre subgrafos (User Stubs)"
 
-log_both "${CYAN}📥 RESPONSE:${NC}"
-log_both "$(format_json "$RESPONSE")"
-log_both ""
+print_schema "   ┌─────────────────────────────────────────────────────────────────────┐
+   │  # loans-schema.graphqls                                           │
+   │  # Loans Service EXTIENDE el tipo User (que pertenece a Users)     │
+   │                                                                     │
+   │  \"\"\"                                                               │
+   │  User - Referencia externa desde el subgrafo Users                 │
+   │  Usamos @extends para agregar campos al tipo User                  │
+   │  \"\"\"                                                               │
+   │  type User @key(fields: \"id\") @extends {    ← NO SOY OWNER        │
+   │    id: ID! @external                         ← Campo de Users     │
+   │    \"\"\"                                                             │
+   │    Préstamos donde el usuario es prestamista                       │
+   │    Campo agregado por el subgrafo Loans                            │
+   │    \"\"\"                                                             │
+   │    loansAsLender: [Loan!]!                   ← CAMPO NUEVO         │
+   │    \"\"\"                                                             │
+   │    Préstamos donde el usuario es prestatario                       │
+   │    \"\"\"                                                             │
+   │    loansAsBorrower: [Loan!]!                 ← CAMPO NUEVO         │
+   │  }                                                                 │
+   │                                                                     │
+   │  # Y en el tipo Loan, referenciamos a User:                        │
+   │  type Loan @key(fields: \"id\") {                                    │
+   │    id: ID!                                                         │
+   │    amount: Float!                                                  │
+   │    \"\"\"                                                             │
+   │    Prestamista - Referencia a User del otro subgrafo               │
+   │    Nullable porque préstamos PENDING no tienen lender              │
+   │    \"\"\"                                                             │
+   │    lender: User                              ← REF (nullable)      │
+   │    \"\"\"                                                             │
+   │    Prestatario - Referencia a User del otro subgrafo               │
+   │    \"\"\"                                                             │
+   │    borrower: User!                           ← REF (obligatorio)   │
+   │  }                                                                 │
+   └─────────────────────────────────────────────────────────────────────┘"
 
-# Verificar que loans tiene referencias a users
-if echo "$RESPONSE" | grep -q '"borrower"' && echo "$RESPONSE" | grep -q '"lender"' && echo "$RESPONSE" | grep -q '"id"'; then
-    log_both "${GREEN}✅ PASSED: Referencias User (stubs) retornadas - lender/borrower presentes${NC}"
-    PASSED_TESTS=$((PASSED_TESTS + 1))
-else
-    log_both "${RED}❌ FAILED: Referencias User no encontradas${NC}"
-    FAILED_TESTS=$((FAILED_TESTS + 1))
-fi
-log_both ""
-pause_script
-log_both ""
+print_java "   // Loans Service retorna \"stubs\" - solo {__typename, id}
+   // El Gateway después resuelve el User completo con _entities
+   @DgsData(parentType = \"Loan\", field = \"borrower\")
+   public Map<String, Object> borrower(DataFetchingEnvironment dfe) {
+       Loan loan = dfe.getSource();
+       return Map.of(\"__typename\", \"User\", \"id\", loan.getBorrowerId());
+   }"
 
-##############################################################################
-# PRUEBA 8: Mutation createUser
-##############################################################################
-log_both "${BLUE}═══════════════════════════════════════════════════════════${NC}"
-log_both "${YELLOW}📋 PRUEBA 8: Mutation createUser${NC}"
-log_both "${BLUE}═══════════════════════════════════════════════════════════${NC}"
-log_both ""
-log_both "🎯 Objetivo: Verificar mutations en Users Service"
-log_both "🏢 Servicio: Users Service (8081)"
-log_both "✏️  Operación: Crear nuevo usuario"
-log_both ""
-log_both "${CYAN}📤 REQUEST (GraphQL):${NC}"
-log_both "mutation {"
-log_both "  createUser(input: {"
-log_both "    email: \"test@neobank.com\","
-log_both "    fullName: \"Test User\","
-log_both "    userType: LENDER"
-log_both "  }) { success message user { id } }"
-log_both "}"
-log_both ""
-log_both "${CYAN}Ejecutando mutation...${NC}"
-log_both ""
+run_graphql_test "Loans con referencias a Users (stubs)" \
+    "$LOANS_URL" \
+    "Loans Service (8082)" \
+    '{ loans { id amount borrower { id } lender { id } } }' \
+    'borrower.*id.*lender'
 
-TOTAL_TESTS=$((TOTAL_TESTS + 1))
+################################################################################
+# SECCIÓN 5.5 - MUTATIONS EN FEDERATION
+################################################################################
 
-RESPONSE=$(execute_query "$USERS_URL" "mutation { createUser(input: {email: \\\"test@neobank.com\\\", fullName: \\\"Test User\\\", userType: LENDER}) { success message user { id } } }")
+print_section "SECCIÓN 5.5 — MUTATIONS EN SERVICIOS FEDERADOS"
 
-log_both "${CYAN}📥 RESPONSE:${NC}"
-log_both "$(format_json "$RESPONSE")"
-log_both ""
+log "${WHITE}┌─────────────────────────────────────────────────────────────────────────────┐${NC}"
+log "${WHITE}│  🎯 OBJETIVO DE ESTA SECCIÓN                                               │${NC}"
+log "${WHITE}│                                                                             │${NC}"
+log "${WHITE}│  Las mutations funcionan igual que en GraphQL normal.                      │${NC}"
+log "${WHITE}│  Cada servicio define y ejecuta sus propias mutations.                     │${NC}"
+log "${WHITE}│                                                                             │${NC}"
+log "${WHITE}│  REGLA IMPORTANTE:                                                         │${NC}"
+log "${WHITE}│  ┌─────────────────────────────────────────────────────────────────┐       │${NC}"
+log "${WHITE}│  │  Una mutation pertenece a UN SOLO servicio.                     │       │${NC}"
+log "${WHITE}│  │  NO se puede dividir una mutation entre servicios.              │       │${NC}"
+log "${WHITE}│  │                                                                  │       │${NC}"
+log "${WHITE}│  │  ✅ createUser    → Users Service                               │       │${NC}"
+log "${WHITE}│  │  ✅ createLoan    → Loans Service                               │       │${NC}"
+log "${WHITE}│  │  ❌ createUserWithLoan → NO SE PUEDE (cruza servicios)          │       │${NC}"
+log "${WHITE}│  └─────────────────────────────────────────────────────────────────┘       │${NC}"
+log "${WHITE}└─────────────────────────────────────────────────────────────────────────────┘${NC}"
+log ""
+pause
 
-if echo "$RESPONSE" | grep -q "success"; then
-    log_both "${GREEN}✅ PASSED: Mutation createUser funciona${NC}"
-    PASSED_TESTS=$((PASSED_TESTS + 1))
-else
-    log_both "${RED}❌ FAILED: Usuario no creado${NC}"
-    FAILED_TESTS=$((FAILED_TESTS + 1))
-fi
-log_both ""
-pause_script
-log_both ""
+# Test 8: Mutation createUser
+print_subsection "Test 8: Mutation createUser (Users Service)"
 
-##############################################################################
-# PRUEBA 9: Mutation createLoanRequest
-##############################################################################
-log_both "${BLUE}═══════════════════════════════════════════════════════════${NC}"
-log_both "${YELLOW}📋 PRUEBA 9: Mutation createLoanRequest${NC}"
-log_both "${BLUE}═══════════════════════════════════════════════════════════${NC}"
-log_both ""
-log_both "🎯 Objetivo: Verificar mutations en Loans Service"
-log_both "🏢 Servicio: Loans Service (8082)"
-log_both "✏️  Operación: Crear solicitud de préstamo"
-log_both ""
-log_both "${CYAN}📤 REQUEST (GraphQL):${NC}"
-log_both "mutation {"
-log_both "  createLoanRequest(input: {"
-log_both "    borrowerId: \"user-003\","
-log_both "    amount: 5000,"
-log_both "    interestRate: 8.5,"
-log_both "    term: 12,"
-log_both "    purpose: \"Test loan\""
-log_both "  }) { success message }"
-log_both "}"
-log_both ""
-log_both "${CYAN}Ejecutando mutation...${NC}"
-log_both ""
+print_schema "   ┌─────────────────────────────────────────────────────────────────────┐
+   │  # users-schema.graphqls                                           │
+   │                                                                     │
+   │  input CreateUserInput {                                           │
+   │    email: String!                     # Email del usuario          │
+   │    fullName: String!                  # Nombre completo            │
+   │    userType: UserType!                # LENDER | BORROWER | BOTH   │
+   │  }                                                                 │
+   │                                                                     │
+   │  type UserResponse {                                               │
+   │    success: Boolean!                  # ¿Operación exitosa?        │
+   │    message: String!                   # Mensaje descriptivo        │
+   │    user: User                         # Usuario creado (si éxito)  │
+   │  }                                                                 │
+   │                                                                     │
+   │  type Mutation {                                                    │
+   │    createUser(input: CreateUserInput!): UserResponse!  ← ESTA     │
+   │  }                                                                 │
+   └─────────────────────────────────────────────────────────────────────┘"
 
-TOTAL_TESTS=$((TOTAL_TESTS + 1))
+run_graphql_test "Mutation createUser" \
+    "$USERS_URL" \
+    "Users Service (8081)" \
+    'mutation { createUser(input: {email: \"nuevo@test.com\", fullName: \"Nuevo Usuario\", userType: LENDER}) { success message user { id fullName } } }' \
+    'success.*true'
 
-RESPONSE=$(execute_query "$LOANS_URL" "mutation { createLoanRequest(input: {borrowerId: \\\"user-003\\\", amount: 5000, interestRate: 8.5, term: 12, purpose: \\\"Test loan\\\"}) { success message } }")
+# Test 9: Mutation createLoanRequest
+print_subsection "Test 9: Mutation createLoanRequest (Loans Service)"
 
-log_both "${CYAN}📥 RESPONSE:${NC}"
-log_both "$(format_json "$RESPONSE")"
-log_both ""
+print_schema "   ┌─────────────────────────────────────────────────────────────────────┐
+   │  # loans-schema.graphqls                                           │
+   │                                                                     │
+   │  # FLUJO DE NEGOCIO P2P LENDING:                                   │
+   │  # 1. Borrower solicita préstamo → createLoanRequest → PENDING     │
+   │  # 2. Lender financia            → fundLoan          → FUNDED      │
+   │  # 3. Se activa                                      → ACTIVE      │
+   │  # 4. Borrower paga cuotas                                         │
+   │  # 5. Completa                                       → COMPLETED   │
+   │                                                                     │
+   │  input CreateLoanInput {                                           │
+   │    borrowerId: ID!                    # Quién pide el préstamo     │
+   │    amount: Float!                     # Monto solicitado           │
+   │    interestRate: Float!               # Tasa de interés anual      │
+   │    term: Int!                         # Plazo en meses             │
+   │    purpose: String!                   # Para qué es el préstamo    │
+   │  }                                                                 │
+   │                                                                     │
+   │  type LoanResponse {                                               │
+   │    success: Boolean!                                               │
+   │    message: String!                                                │
+   │    loan: Loan                                                      │
+   │  }                                                                 │
+   │                                                                     │
+   │  type Mutation {                                                    │
+   │    createLoanRequest(input: CreateLoanInput!): LoanResponse!       │
+   │    fundLoan(loanId: ID!, lenderId: ID!): LoanResponse!             │
+   │  }                                                                 │
+   └─────────────────────────────────────────────────────────────────────┘"
 
-if echo "$RESPONSE" | grep -q "success"; then
-    log_both "${GREEN}✅ PASSED: Mutation createLoanRequest funciona${NC}"
-    PASSED_TESTS=$((PASSED_TESTS + 1))
-else
-    log_both "${RED}❌ FAILED: Préstamo no creado${NC}"
-    FAILED_TESTS=$((FAILED_TESTS + 1))
-fi
-log_both ""
-pause_script
-log_both ""
+run_graphql_test "Mutation createLoanRequest" \
+    "$LOANS_URL" \
+    "Loans Service (8082)" \
+    'mutation { createLoanRequest(input: {borrowerId: \"user-003\", amount: 5000, interestRate: 8.5, term: 12, purpose: \"Test loan federation\"}) { success message loan { id amount status } } }' \
+    'success.*true'
 
-##############################################################################
+################################################################################
 # RESUMEN FINAL
-##############################################################################
-log_both "${CYAN}╔═══════════════════════════════════════════════════════════╗${NC}"
-log_both "${CYAN}║                    📊 RESUMEN DE PRUEBAS                  ║${NC}"
-log_both "${CYAN}╚═══════════════════════════════════════════════════════════╝${NC}"
-log_both ""
-log_both "${GREEN}✅ PRUEBA 1:${NC} Query all users (Users Service)"
-log_both "${GREEN}✅ PRUEBA 2:${NC} Query single user by ID"
-log_both "${GREEN}✅ PRUEBA 3:${NC} Query verified lenders con objetos anidados"
-log_both "${GREEN}✅ PRUEBA 4:${NC} Entity Resolution (_entities query)"
-log_both "${GREEN}✅ PRUEBA 5:${NC} Query all loans (Loans Service)"
-log_both "${GREEN}✅ PRUEBA 6:${NC} Query loans by status (filtro enum)"
-log_both "${YELLOW}⚠️  PRUEBA 7:${NC} Referencias entre subgrafos (requiere Apollo Router)"
-log_both "${GREEN}✅ PRUEBA 8:${NC} Mutation createUser"
-log_both "${GREEN}✅ PRUEBA 9:${NC} Mutation createLoanRequest"
-log_both ""
-log_both "${CYAN}╔═══════════════════════════════════════════════════════════╗${NC}"
-log_both "${CYAN}║                  📈 ESTADÍSTICAS FINALES                  ║${NC}"
-log_both "${CYAN}╚═══════════════════════════════════════════════════════════╝${NC}"
-log_both ""
-log_both "${YELLOW}Total de Pruebas:${NC}     ${TOTAL_TESTS}"
-log_both "${GREEN}Pruebas Exitosas:${NC}     ${PASSED_TESTS} ✅"
-log_both "${RED}Pruebas Fallidas:${NC}     ${FAILED_TESTS}"
+################################################################################
+
+print_section "📊 RESUMEN DE TESTS - CHAPTER 05"
+
+PASS_RATE=0
 if [ $TOTAL_TESTS -gt 0 ]; then
-    SUCCESS_RATE=$((PASSED_TESTS * 100 / TOTAL_TESTS))
-    log_both "${CYAN}Tasa de Éxito:${NC}        ${SUCCESS_RATE}%"
+    PASS_RATE=$((PASSED_TESTS * 100 / TOTAL_TESTS))
 fi
-log_both ""
-log_both "${CYAN}╔═══════════════════════════════════════════════════════════╗${NC}"
-log_both "${CYAN}║          🎓 CONCEPTOS DE FEDERATION VERIFICADOS           ║${NC}"
-log_both "${CYAN}╚═══════════════════════════════════════════════════════════╝${NC}"
-log_both ""
-log_both "${YELLOW}🏗️  Arquitectura Federada:${NC}"
-log_both "   • Users Service (8081) → Owner de User (@key)"
-log_both "   • Loans Service (8082) → Owner de Loan, extiende User (@extends)"
-log_both ""
-log_both "${YELLOW}🔑 Directivas Apollo Federation:${NC}"
-log_both "   • @key(fields: \"id\") → User es entidad federada"
-log_both "   • @extends → Loans extiende User con loansAsLender/loansAsBorrower"
-log_both "   • @external → Campos definidos en otro subgrafo"
-log_both ""
-log_both "${YELLOW}🔗 Entity Resolution:${NC}"
-log_both "   • _entities query → Users Service resuelve User por ID"
-log_both "   • Stubs {__typename, id} → Referencias entre subgrafos"
-log_both ""
-log_both "${YELLOW}📦 Bounded Contexts (DDD):${NC}"
-log_both "   • Users Context → Autenticación, perfiles, reputación"
-log_both "   • Loans Context → Préstamos P2P, matching, intereses"
-log_both ""
-log_both "${GREEN}🎉 ¡Conceptos de Apollo Federation implementados correctamente!${NC}"
-log_both "${CYAN}Con Apollo Router, estos servicios se unificarían en un solo endpoint.${NC}"
-log_both ""
-log_both "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-log_both "${GREEN}📄 Log guardado en: ${LOG_FILE}${NC}"
-log_both "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-log_both ""
+
+log "${CYAN}Tests Totales:    ${TOTAL_TESTS}${NC}"
+log "${GREEN}Tests Exitosos:   ${PASSED_TESTS}${NC}"
+log "${RED}Tests Fallidos:   ${FAILED_TESTS}${NC}"
+log "${YELLOW}Tasa de Éxito:    ${PASS_RATE}%${NC}"
+log ""
+
+if [ $FAILED_TESTS -eq 0 ]; then
+    log "${GREEN}╔══════════════════════════════════════════════════════════════════════════════╗${NC}"
+    log "${GREEN}║                                                                              ║${NC}"
+    log "${GREEN}║                   🎉 ¡TODOS LOS TESTS PASARON! 🎉                           ║${NC}"
+    log "${GREEN}║                                                                              ║${NC}"
+    log "${GREEN}╚══════════════════════════════════════════════════════════════════════════════╝${NC}"
+else
+    log "${YELLOW}╔══════════════════════════════════════════════════════════════════════════════╗${NC}"
+    log "${YELLOW}║                                                                              ║${NC}"
+    log "${YELLOW}║                   ⚠️  ALGUNOS TESTS FALLARON ⚠️                            ║${NC}"
+    log "${YELLOW}║                                                                              ║${NC}"
+    log "${YELLOW}╚══════════════════════════════════════════════════════════════════════════════╝${NC}"
+fi
+
+log ""
+log "${WHITE}┌─────────────────────────────────────────────────────────────────────────────┐${NC}"
+log "${WHITE}│  📚 RESUMEN: DIRECTIVAS DE APOLLO FEDERATION                               │${NC}"
+log "${WHITE}├─────────────────────────────────────────────────────────────────────────────┤${NC}"
+log "${WHITE}│                                                                             │${NC}"
+log "${WHITE}│  @key(fields: \"id\")     Marca tipo como entidad federada                  │${NC}"
+log "${WHITE}│                          Permite referencias desde otros servicios         │${NC}"
+log "${WHITE}│                                                                             │${NC}"
+log "${WHITE}│  @extends                Extiende un tipo definido en otro servicio        │${NC}"
+log "${WHITE}│                          \"No soy owner, pero agrego campos\"               │${NC}"
+log "${WHITE}│                                                                             │${NC}"
+log "${WHITE}│  @external               Referencia un campo de otro servicio              │${NC}"
+log "${WHITE}│                          \"Este campo existe, pero no es mío\"              │${NC}"
+log "${WHITE}│                                                                             │${NC}"
+log "${WHITE}├─────────────────────────────────────────────────────────────────────────────┤${NC}"
+log "${WHITE}│  📐 SCHEMAS DE ESTE CAPÍTULO                                               │${NC}"
+log "${WHITE}├─────────────────────────────────────────────────────────────────────────────┤${NC}"
+log "${WHITE}│                                                                             │${NC}"
+log "${WHITE}│  users-schema.graphqls (8081):                                             │${NC}"
+log "${WHITE}│    type User @key(fields: \"id\") { ... }     ← OWNER                      │${NC}"
+log "${WHITE}│    type LenderProfile { ... }                                              │${NC}"
+log "${WHITE}│    type BorrowerProfile { ... }                                            │${NC}"
+log "${WHITE}│                                                                             │${NC}"
+log "${WHITE}│  loans-schema.graphqls (8082):                                             │${NC}"
+log "${WHITE}│    type Loan @key(fields: \"id\") { ... }     ← OWNER                      │${NC}"
+log "${WHITE}│    type User @key @extends {                  ← EXTIENDE                  │${NC}"
+log "${WHITE}│      id: ID! @external                                                     │${NC}"
+log "${WHITE}│      loansAsLender: [Loan!]!                  ← Campo nuevo               │${NC}"
+log "${WHITE}│      loansAsBorrower: [Loan!]!                ← Campo nuevo               │${NC}"
+log "${WHITE}│    }                                                                       │${NC}"
+log "${WHITE}│                                                                             │${NC}"
+log "${WHITE}└─────────────────────────────────────────────────────────────────────────────┘${NC}"
+log ""
+log "${CYAN}📄 Log completo guardado en: ${OUTPUT_FILE}${NC}"
+log ""
+log "${WHITE}ARQUITECTURA FINAL:${NC}"
+log "${YELLOW}  ┌─────────────────────────────────────────────────────────────────────┐${NC}"
+log "${YELLOW}  │                        Apollo Gateway (8080)                        │${NC}"
+log "${YELLOW}  │                      UN endpoint para clientes                      │${NC}"
+log "${YELLOW}  └─────────────────────────────┬───────────────────────────────────────┘${NC}"
+log "${YELLOW}                                │                                        ${NC}"
+log "${YELLOW}                ┌───────────────┴───────────────┐                        ${NC}"
+log "${YELLOW}                ▼                               ▼                        ${NC}"
+log "${YELLOW}  ┌─────────────────────────┐     ┌─────────────────────────┐           ${NC}"
+log "${YELLOW}  │   Users Service (8081)  │     │   Loans Service (8082)  │           ${NC}"
+log "${YELLOW}  │   • User @key           │     │   • Loan @key           │           ${NC}"
+log "${YELLOW}  │   • LenderProfile       │     │   • User @extends       │           ${NC}"
+log "${YELLOW}  │   • BorrowerProfile     │     │     - loansAsLender     │           ${NC}"
+log "${YELLOW}  └─────────────────────────┘     │     - loansAsBorrower   │           ${NC}"
+log "${YELLOW}                                  └─────────────────────────┘           ${NC}"
+log ""
+
+exit $FAILED_TESTS

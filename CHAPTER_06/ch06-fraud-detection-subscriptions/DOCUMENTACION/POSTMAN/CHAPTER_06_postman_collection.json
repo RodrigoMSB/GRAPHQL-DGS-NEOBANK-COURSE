@@ -1,0 +1,415 @@
+{
+  "info": {
+    "_postman_id": "ch06-fraud-detection-subscriptions",
+    "name": "CHAPTER 06: Real-time Fraud Detection - GraphQL Subscriptions",
+    "description": "Complete test suite for Chapter 06 - GraphQL Subscriptions with WebSockets\n\n**Covers:**\n- Test 1: Query transactions (ver transacciones existentes)\n- Test 2: Mutation transacción normal (sin fraude)\n- Test 3: Mutation fraude MEDIUM (Wire Transfer)\n- Test 4: Mutation fraude CRITICAL (Gambling + Nigeria)\n- Test 5: Query historial de alertas\n- Test 6: Mutation fraude HIGH (Crypto + Russia)\n\n**Total: 6 automated tests**\n\n**Feature:** Real-time Fraud Detection\n**Stack:** Spring Boot 3.2 + Netflix DGS 8.2.0 + WebSockets\n\n**Endpoint:** http://localhost:8080/graphql\n\n**Prerequisites:**\n1. Run: `mvn clean spring-boot:run`\n2. Wait for: \"Started FraudDetectionApplication\"\n\n**⚠️ NOTA SOBRE SUBSCRIPTIONS:**\nPostman NO soporta GraphQL Subscriptions (WebSocket).\nPara probar subscriptions, usa GraphiQL en http://localhost:8080/",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "1️⃣ QUERIES",
+      "item": [
+        {
+          "name": "Test 1 - Query transactions de una cuenta",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"Response has transactions array\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.data).to.exist;",
+                  "    pm.expect(jsonData.data.transactions).to.be.an('array');",
+                  "});",
+                  "",
+                  "pm.test(\"Transactions have required fields\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    if (jsonData.data.transactions.length > 0) {",
+                  "        var txn = jsonData.data.transactions[0];",
+                  "        pm.expect(txn).to.have.property('id');",
+                  "        pm.expect(txn).to.have.property('amount');",
+                  "        pm.expect(txn).to.have.property('merchantName');",
+                  "        pm.expect(txn).to.have.property('status');",
+                  "        pm.expect(txn).to.have.property('riskScore');",
+                  "    }",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "graphql",
+              "graphql": {
+                "query": "{\n  transactions(accountId: \"account-001\") {\n    id\n    amount\n    merchantName\n    status\n    riskScore\n  }\n}",
+                "variables": ""
+              }
+            },
+            "url": {
+              "raw": "{{GRAPHQL_ENDPOINT}}",
+              "host": [
+                "{{GRAPHQL_ENDPOINT}}"
+              ]
+            },
+            "description": "**Query - Transacciones existentes**\n\nObtiene las transacciones de prueba precargadas.\n\n**Schema:**\n```graphql\ntype Transaction {\n  id: ID!\n  accountId: String!\n  amount: Float!\n  merchantName: String!\n  status: TransactionStatus!\n  riskScore: Float!\n}\n\nenum TransactionStatus {\n  PENDING\n  APPROVED\n  REJECTED\n  FLAGGED\n}\n```\n\n**Expected:** Array de transacciones (Starbucks, Amazon, Uber)"
+          },
+          "response": []
+        },
+        {
+          "name": "Test 5 - Query historial de alertas de fraude",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"Response has fraudAlerts array\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.data).to.exist;",
+                  "    pm.expect(jsonData.data.fraudAlerts).to.be.an('array');",
+                  "});",
+                  "",
+                  "pm.test(\"Alerts have required fields\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    if (jsonData.data.fraudAlerts.length > 0) {",
+                  "        var alert = jsonData.data.fraudAlerts[0];",
+                  "        pm.expect(alert).to.have.property('id');",
+                  "        pm.expect(alert).to.have.property('riskLevel');",
+                  "        pm.expect(alert).to.have.property('reasons');",
+                  "        pm.expect(alert).to.have.property('recommendedAction');",
+                  "    }",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "graphql",
+              "graphql": {
+                "query": "{\n  fraudAlerts(accountId: \"account-001\") {\n    id\n    riskLevel\n    reasons\n    recommendedAction\n    transaction {\n      id\n      amount\n      merchantName\n    }\n  }\n}",
+                "variables": ""
+              }
+            },
+            "url": {
+              "raw": "{{GRAPHQL_ENDPOINT}}",
+              "host": [
+                "{{GRAPHQL_ENDPOINT}}"
+              ]
+            },
+            "description": "**Query - Historial de alertas**\n\nObtiene TODAS las alertas pasadas (histórico).\n\n**Diferencia con Subscription:**\n- `fraudAlerts` → Dame las alertas PASADAS (una vez)\n- `fraudAlertDetected` → Avísame las NUEVAS (streaming)\n\n**Expected:** Array de alertas generadas por Tests 3, 4 y 6"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "2️⃣ MUTATIONS - Transacciones",
+      "item": [
+        {
+          "name": "Test 2 - Transacción normal (sin fraude)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"Mutation was successful\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.data.processTransaction.success).to.be.true;",
+                  "});",
+                  "",
+                  "pm.test(\"Transaction was created\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.data.processTransaction.transaction).to.exist;",
+                  "    pm.expect(jsonData.data.processTransaction.transaction.id).to.exist;",
+                  "});",
+                  "",
+                  "pm.test(\"Low or no risk score\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    var txn = jsonData.data.processTransaction.transaction;",
+                  "    // Puede tener riskScore por velocity check, pero debería ser bajo",
+                  "    pm.expect(txn.riskScore).to.be.below(50);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "graphql",
+              "graphql": {
+                "query": "mutation {\n  processTransaction(input: {\n    accountId: \"account-001\"\n    amount: 75\n    currency: \"USD\"\n    merchantName: \"Target\"\n    category: \"Shopping\"\n    location: \"San Francisco, US\"\n  }) {\n    success\n    message\n    transaction {\n      id\n      status\n      riskScore\n    }\n    fraudAlert {\n      id\n      riskLevel\n      reasons\n    }\n  }\n}",
+                "variables": ""
+              }
+            },
+            "url": {
+              "raw": "{{GRAPHQL_ENDPOINT}}",
+              "host": [
+                "{{GRAPHQL_ENDPOINT}}"
+              ]
+            },
+            "description": "**Transacción Normal - Sin fraude esperado**\n\n- 💰 Monto: $75 USD (bajo)\n- 🏪 Comercio: Target (conocido)\n- 📍 Ubicación: San Francisco, US (normal)\n- 📁 Categoría: Shopping (bajo riesgo)\n\n**Expected:**\n- status: APPROVED\n- riskScore: 0 o bajo\n- fraudAlert: null\n\n**Nota:** Puede detectar \"Velocity Check\" si hay muchas transacciones recientes."
+          },
+          "response": []
+        },
+        {
+          "name": "Test 3 - 🚨 Fraude MEDIUM (Wire Transfer)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"Mutation was successful\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.data.processTransaction.success).to.be.true;",
+                  "});",
+                  "",
+                  "pm.test(\"Fraud alert was generated\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.data.processTransaction.fraudAlert).to.exist;",
+                  "});",
+                  "",
+                  "pm.test(\"Risk level is MEDIUM or higher\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    var riskLevel = jsonData.data.processTransaction.fraudAlert.riskLevel;",
+                  "    pm.expect(riskLevel).to.be.oneOf(['MEDIUM', 'HIGH', 'CRITICAL']);",
+                  "});",
+                  "",
+                  "pm.test(\"Has reasons array\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    var reasons = jsonData.data.processTransaction.fraudAlert.reasons;",
+                  "    pm.expect(reasons).to.be.an('array');",
+                  "    pm.expect(reasons.length).to.be.above(0);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "graphql",
+              "graphql": {
+                "query": "mutation {\n  processTransaction(input: {\n    accountId: \"account-001\"\n    amount: 5000\n    currency: \"USD\"\n    merchantName: \"Unknown Merchant\"\n    category: \"Wire Transfer\"\n    location: \"San Francisco, US\"\n  }) {\n    success\n    message\n    transaction {\n      id\n      status\n      riskScore\n    }\n    fraudAlert {\n      id\n      riskLevel\n      reasons\n      recommendedAction\n    }\n  }\n}",
+                "variables": ""
+              }
+            },
+            "url": {
+              "raw": "{{GRAPHQL_ENDPOINT}}",
+              "host": [
+                "{{GRAPHQL_ENDPOINT}}"
+              ]
+            },
+            "description": "**🚨 Fraude MEDIUM - Wire Transfer + Monto Alto**\n\n- 💰 Monto: $5,000 USD (monto redondo → +10 pts)\n- 🏪 Comercio: Unknown Merchant\n- 📁 Categoría: Wire Transfer (alto riesgo → +25 pts)\n\n**Risk Score esperado:** 35+ → MEDIUM o superior\n\n**Reglas violadas:**\n- Monto redondo ≥$5000 (+10)\n- Categoría alto riesgo (+25)\n\n**Este es el tipo de transacción que dispararía una Subscription!**"
+          },
+          "response": []
+        },
+        {
+          "name": "Test 4 - 🔥 Fraude CRITICAL (Gambling + Nigeria)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"Fraud alert was generated\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.data.processTransaction.fraudAlert).to.exist;",
+                  "});",
+                  "",
+                  "pm.test(\"Risk level is HIGH or CRITICAL\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    var riskLevel = jsonData.data.processTransaction.fraudAlert.riskLevel;",
+                  "    pm.expect(riskLevel).to.be.oneOf(['HIGH', 'CRITICAL']);",
+                  "});",
+                  "",
+                  "pm.test(\"Transaction was FLAGGED\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    var status = jsonData.data.processTransaction.transaction.status;",
+                  "    pm.expect(status).to.eql('FLAGGED');",
+                  "});",
+                  "",
+                  "pm.test(\"Recommended action is severe\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    var action = jsonData.data.processTransaction.fraudAlert.recommendedAction;",
+                  "    pm.expect(action).to.match(/BLOCK|2FA|verification/i);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "graphql",
+              "graphql": {
+                "query": "mutation {\n  processTransaction(input: {\n    accountId: \"account-001\"\n    amount: 8000\n    currency: \"USD\"\n    merchantName: \"Online Casino\"\n    category: \"Gambling\"\n    location: \"Lagos, Nigeria\"\n  }) {\n    success\n    message\n    transaction {\n      id\n      status\n      riskScore\n    }\n    fraudAlert {\n      id\n      riskLevel\n      reasons\n      recommendedAction\n    }\n  }\n}",
+                "variables": ""
+              }
+            },
+            "url": {
+              "raw": "{{GRAPHQL_ENDPOINT}}",
+              "host": [
+                "{{GRAPHQL_ENDPOINT}}"
+              ]
+            },
+            "description": "**🔥 Fraude CRITICAL - ¡Todas las alarmas!**\n\n- 💰 Monto: $8,000 USD (monto redondo → +10 pts)\n- 🎰 Categoría: Gambling (alto riesgo → +25 pts)\n- 📍 Ubicación: Lagos, Nigeria (país sospechoso → +40 pts)\n\n**Risk Score esperado:** 75+ → HIGH o CRITICAL\n\n**Reglas violadas:**\n- Monto redondo ≥$5000 (+10)\n- Categoría alto riesgo: Gambling (+25)\n- Ubicación sospechosa: Nigeria (+40)\n\n**Acción esperada:** \"BLOCK immediately\" o \"Require 2FA\"\n\n**🔔 Si tuvieras una Subscription activa, recibirías esta alerta INSTANTÁNEAMENTE!**"
+          },
+          "response": []
+        },
+        {
+          "name": "Test 6 - 🚨 Fraude HIGH (Crypto + Russia)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"Fraud alert was generated\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.data.processTransaction.fraudAlert).to.exist;",
+                  "});",
+                  "",
+                  "pm.test(\"Risk level is HIGH or CRITICAL\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    var riskLevel = jsonData.data.processTransaction.fraudAlert.riskLevel;",
+                  "    pm.expect(riskLevel).to.be.oneOf(['HIGH', 'CRITICAL']);",
+                  "});",
+                  "",
+                  "pm.test(\"Multiple reasons detected\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    var reasons = jsonData.data.processTransaction.fraudAlert.reasons;",
+                  "    pm.expect(reasons.length).to.be.at.least(2);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "graphql",
+              "graphql": {
+                "query": "mutation {\n  processTransaction(input: {\n    accountId: \"account-001\"\n    amount: 12000\n    currency: \"USD\"\n    merchantName: \"CryptoExchange\"\n    category: \"Cryptocurrency\"\n    location: \"Moscow, Russia\"\n  }) {\n    success\n    message\n    transaction {\n      id\n      status\n      riskScore\n    }\n    fraudAlert {\n      id\n      riskLevel\n      reasons\n      recommendedAction\n    }\n  }\n}",
+                "variables": ""
+              }
+            },
+            "url": {
+              "raw": "{{GRAPHQL_ENDPOINT}}",
+              "host": [
+                "{{GRAPHQL_ENDPOINT}}"
+              ]
+            },
+            "description": "**🚨 Fraude HIGH - Crypto + Russia**\n\n- 💰 Monto: $12,000 USD (monto redondo → +10 pts)\n- 🪙 Categoría: Cryptocurrency (alto riesgo → +25 pts)\n- 📍 Ubicación: Moscow, Russia (país sospechoso → +40 pts)\n\n**Risk Score esperado:** 75+ → HIGH o CRITICAL\n\n**Reglas violadas:**\n- Monto redondo ≥$5000 (+10)\n- Categoría alto riesgo: Cryptocurrency (+25)\n- Ubicación sospechosa: Russia (+40)"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "🔔 3️⃣ SUBSCRIPTIONS (Instrucciones)",
+      "item": [
+        {
+          "name": "📖 Cómo probar Subscriptions",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "graphql",
+              "graphql": {
+                "query": "# ⚠️ POSTMAN NO SOPORTA SUBSCRIPTIONS\n# Las subscriptions usan WebSocket, no HTTP.\n#\n# Para probar subscriptions, usa GraphiQL:\n# 1. Abre: http://localhost:8080/\n#\n# 2. En PESTAÑA 1, ejecuta esta subscription:\n#    subscription {\n#      fraudAlertDetected(accountId: \"account-001\") {\n#        id\n#        riskLevel\n#        reasons\n#        recommendedAction\n#      }\n#    }\n#\n# 3. En PESTAÑA 2, ejecuta una mutation de fraude:\n#    mutation {\n#      processTransaction(input: {\n#        accountId: \"account-001\"\n#        amount: 8000\n#        currency: \"USD\"\n#        merchantName: \"Online Casino\"\n#        category: \"Gambling\"\n#        location: \"Lagos, Nigeria\"\n#      }) {\n#        success\n#      }\n#    }\n#\n# 4. 🔥 ¡La PESTAÑA 1 recibe la alerta INSTANTÁNEAMENTE!\n#    Sin refrescar, sin polling, sin nada.\n#\n# Esto es Subscription: el servidor EMPUJA los datos al cliente.\n\n{\n  __typename\n}",
+                "variables": ""
+              }
+            },
+            "url": {
+              "raw": "{{GRAPHQL_ENDPOINT}}",
+              "host": [
+                "{{GRAPHQL_ENDPOINT}}"
+              ]
+            },
+            "description": "# 🔔 Cómo probar Subscriptions\n\n**⚠️ Postman NO soporta GraphQL Subscriptions** porque usan WebSocket, no HTTP.\n\n## Para probar la magia de tiempo real:\n\n### 1. Abre GraphiQL\n```\nhttp://localhost:8080/\n```\n\n### 2. En PESTAÑA 1 - Subscribirse:\n```graphql\nsubscription {\n  fraudAlertDetected(accountId: \"account-001\") {\n    id\n    riskLevel\n    reasons\n    recommendedAction\n  }\n}\n```\n*(Dale Play y déjala escuchando)*\n\n### 3. En PESTAÑA 2 - Crear fraude:\n```graphql\nmutation {\n  processTransaction(input: {\n    accountId: \"account-001\"\n    amount: 8000\n    currency: \"USD\"\n    merchantName: \"Online Casino\"\n    category: \"Gambling\"\n    location: \"Lagos, Nigeria\"\n  }) {\n    success\n  }\n}\n```\n\n### 4. 🔥 ¡Observa la PESTAÑA 1!\nLa alerta aparece **INSTANTÁNEAMENTE** sin refrescar.\n\n---\n\n## ¿Qué está pasando internamente?\n\n```\n┌──────────────┐                    ┌──────────────┐\n│  PESTAÑA 1   │                    │  PESTAÑA 2   │\n│  Subscription│                    │  Mutation    │\n└──────┬───────┘                    └──────┬───────┘\n       │                                   │\n       │ WebSocket abierto                 │ HTTP POST\n       │                                   │\n       └──────────────┐    ┌───────────────┘\n                      │    │\n                      ▼    ▼\n               ┌─────────────────┐\n               │    SERVIDOR     │\n               │   processTransaction\n               │        │        │\n               │        ▼        │\n               │  FraudDetection │\n               │        │        │\n               │        ▼        │\n               │  Publisher.emit │\n               └────────┬────────┘\n                        │\n                        ▼ PUSH instantáneo\n               ┌─────────────────┐\n               │   PESTAÑA 1     │\n               │ recibe alerta 🔥│\n               └─────────────────┘\n```"
+          },
+          "response": []
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "GRAPHQL_ENDPOINT",
+      "value": "http://localhost:8080/graphql",
+      "type": "string"
+    }
+  ]
+}
