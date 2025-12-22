@@ -1,0 +1,615 @@
+{
+  "info": {
+    "_postman_id": "ch08-carbon-footprint-governance",
+    "name": "CHAPTER 08: Carbon Footprint - Governance & Schema Evolution",
+    "description": "Complete test suite for Chapter 08 - Schema Governance & Versioning\n\n**Covers:**\n- Test 1: Schema Version Info (Governance metadata)\n- Test 2: Transactions con Carbon Footprint\n- Test 3: Sustainability Report\n- Test 4: Comparar Períodos (Nov vs Dic)\n- Test 5: Filtrar por Impact Level (CRITICAL)\n- Test 6: Crear Transaction (genera Alert)\n- Test 7: Endpoint DEPRECATED (buyOffset)\n\n**Total: 7 automated tests**\n\n**Feature:** Carbon Footprint Tracking + Schema Governance\n**Stack:** Spring Boot 3.2 + Netflix DGS 8.2.0\n\n**Governance Concepts:**\n- @deprecated directive\n- Schema versioning (SemVer)\n- Breaking vs Additive changes\n- Deprecation timeline\n\n**Endpoint:** http://localhost:8080/graphql\n\n**Prerequisites:**\n1. Run: `mvn clean spring-boot:run`\n2. Wait for: \"Started CarbonFootprintApplication\"",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "1️⃣ GOVERNANCE",
+      "item": [
+        {
+          "name": "Test 1 - Schema Version Info",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"Response has schemaVersion\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.data).to.exist;",
+                  "    pm.expect(jsonData.data.schemaVersion).to.exist;",
+                  "});",
+                  "",
+                  "pm.test(\"Version is 2.0.0\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.data.schemaVersion.version).to.eql('2.0.0');",
+                  "});",
+                  "",
+                  "pm.test(\"Has deprecations array\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.data.schemaVersion.deprecations).to.be.an('array');",
+                  "    pm.expect(jsonData.data.schemaVersion.deprecations.length).to.be.above(0);",
+                  "});",
+                  "",
+                  "pm.test(\"Transaction.category is deprecated\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    var deprecations = jsonData.data.schemaVersion.deprecations;",
+                  "    var categoryDeprecation = deprecations.find(d => d.field === 'Transaction.category');",
+                  "    pm.expect(categoryDeprecation).to.exist;",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "graphql",
+              "graphql": {
+                "query": "{\n  schemaVersion {\n    version\n    lastUpdated\n    deprecations {\n      field\n      reason\n      removedInVersion\n      alternative\n    }\n    breakingChanges\n  }\n}",
+                "variables": ""
+              }
+            },
+            "url": {
+              "raw": "{{GRAPHQL_ENDPOINT}}",
+              "host": [
+                "{{GRAPHQL_ENDPOINT}}"
+              ]
+            },
+            "description": "**Schema Version Info - GOVERNANCE METADATA**\n\n🎯 **Objetivo:** Verificar metadata de versionado y deprecations\n\n**Governance Best Practices:**\n- Schema versionado (SemVer)\n- Deprecations documentadas\n- Breaking changes registrados\n- Timeline de removal\n\n**Expected:**\n- Version: 2.0.0\n- Deprecations: Transaction.category, Transaction.hasOffset, buyOffset\n- Removal planned: v3.0.0"
+          },
+          "response": []
+        },
+        {
+          "name": "Test 7 - Endpoint DEPRECATED (buyOffset)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"Deprecated endpoint still works\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    // El endpoint deprecated sigue funcionando",
+                  "    pm.expect(jsonData.data).to.exist;",
+                  "    pm.expect(jsonData.data.buyOffset).to.exist;",
+                  "});",
+                  "",
+                  "pm.test(\"Returns boolean (legacy response)\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(typeof jsonData.data.buyOffset).to.eql('boolean');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "graphql",
+              "graphql": {
+                "query": "mutation {\n  buyOffset(transactionId: \"txn-001\")\n}",
+                "variables": ""
+              }
+            },
+            "url": {
+              "raw": "{{GRAPHQL_ENDPOINT}}",
+              "host": [
+                "{{GRAPHQL_ENDPOINT}}"
+              ]
+            },
+            "description": "**Endpoint DEPRECATED - buyOffset**\n\n⚠️ **Este endpoint está DEPRECATED**\n\n```graphql\nbuyOffset(transactionId: ID!): Boolean \n  @deprecated(reason: \"Use purchaseCarbonOffset\")\n```\n\n**¿Por qué mantenerlo?**\n- Backward compatibility\n- Clientes v1 siguen funcionando\n- Tiempo para migrar (90 días)\n\n**Timeline:**\n```\nv2.0.0 (Dec 2024) → Deprecado\nv3.0.0 (Mar 2025) → REMOVIDO\n```\n\n**Revisa los logs del servidor:**\n```\n⚠️ DEPRECATED ENDPOINT USED: buyOffset\n   Use: purchaseCarbonOffset instead\n   Removal: v3.0.0\n```"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "2️⃣ QUERIES - Carbon Footprint",
+      "item": [
+        {
+          "name": "Test 2 - Transactions con Carbon Footprint",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"Response has transactions array\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.data).to.exist;",
+                  "    pm.expect(jsonData.data.transactions).to.be.an('array');",
+                  "});",
+                  "",
+                  "pm.test(\"Transactions have carbonFootprint\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    var txn = jsonData.data.transactions[0];",
+                  "    pm.expect(txn.carbonFootprint).to.exist;",
+                  "    pm.expect(txn.carbonFootprint.co2Kg).to.exist;",
+                  "    pm.expect(txn.carbonFootprint.impactLevel).to.exist;",
+                  "});",
+                  "",
+                  "pm.test(\"Has CRITICAL impact transaction (United Airlines)\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    var critical = jsonData.data.transactions.find(t => ",
+                  "        t.carbonFootprint.impactLevel === 'CRITICAL'",
+                  "    );",
+                  "    pm.expect(critical).to.exist;",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "graphql",
+              "graphql": {
+                "query": "{\n  transactions(accountId: \"account-001\") {\n    id\n    amount\n    merchantName\n    merchantCategory\n    carbonFootprint {\n      co2Kg\n      impactLevel\n    }\n  }\n}",
+                "variables": ""
+              }
+            },
+            "url": {
+              "raw": "{{GRAPHQL_ENDPOINT}}",
+              "host": [
+                "{{GRAPHQL_ENDPOINT}}"
+              ]
+            },
+            "description": "**Transactions con Carbon Footprint**\n\n🎯 **Objetivo:** Ver transacciones con CO2 e impacto calculado\n\n**Impact Levels:**\n- LOW: < 5 kg CO2\n- MEDIUM: 5-20 kg CO2\n- HIGH: 20-100 kg CO2\n- CRITICAL: > 100 kg CO2\n\n**Expected:** United Airlines → CRITICAL (aviación = alto CO2)"
+          },
+          "response": []
+        },
+        {
+          "name": "Test 3 - Sustainability Report",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"Response has sustainabilityReport\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.data).to.exist;",
+                  "    pm.expect(jsonData.data.sustainabilityReport).to.exist;",
+                  "});",
+                  "",
+                  "pm.test(\"Report has required fields\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    var report = jsonData.data.sustainabilityReport;",
+                  "    pm.expect(report).to.have.property('totalCO2Kg');",
+                  "    pm.expect(report).to.have.property('totalTransactions');",
+                  "    pm.expect(report).to.have.property('averageCO2PerTransaction');",
+                  "    pm.expect(report).to.have.property('recommendations');",
+                  "});",
+                  "",
+                  "pm.test(\"Has recommendations array\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.data.sustainabilityReport.recommendations).to.be.an('array');",
+                  "});",
+                  "",
+                  "pm.test(\"Has highest impact transaction\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.data.sustainabilityReport.highestImpactTransaction).to.exist;",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "graphql",
+              "graphql": {
+                "query": "{\n  sustainabilityReport(accountId: \"account-001\", year: 2024, month: 11) {\n    totalCO2Kg\n    totalTransactions\n    averageCO2PerTransaction\n    recommendations\n    highestImpactTransaction {\n      merchantName\n      carbonFootprint {\n        co2Kg\n      }\n    }\n  }\n}",
+                "variables": ""
+              }
+            },
+            "url": {
+              "raw": "{{GRAPHQL_ENDPOINT}}",
+              "host": [
+                "{{GRAPHQL_ENDPOINT}}"
+              ]
+            },
+            "description": "**Sustainability Report - Reporte Mensual**\n\n🎯 **Objetivo:** Reporte de sostenibilidad mensual\n\n**Incluye:**\n- Total CO2 del mes\n- Promedio por transacción\n- Transacción de mayor impacto\n- Recomendaciones personalizadas\n\n**Caso de uso:** Dashboard ESG para clientes"
+          },
+          "response": []
+        },
+        {
+          "name": "Test 4 - Comparar Períodos (Nov vs Dic)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"Response has comparePeriods\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.data).to.exist;",
+                  "    pm.expect(jsonData.data.comparePeriods).to.exist;",
+                  "});",
+                  "",
+                  "pm.test(\"Comparison has trend\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    var comparison = jsonData.data.comparePeriods;",
+                  "    pm.expect(comparison).to.have.property('trend');",
+                  "    pm.expect(comparison.trend).to.be.oneOf(['IMPROVING', 'STABLE', 'WORSENING']);",
+                  "});",
+                  "",
+                  "pm.test(\"Has percentage change\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.data.comparePeriods.percentageChange).to.exist;",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "graphql",
+              "graphql": {
+                "query": "{\n  comparePeriods(\n    accountId: \"account-001\"\n    year1: 2024\n    month1: 11\n    year2: 2024\n    month2: 12\n  ) {\n    previousPeriod\n    co2Change\n    percentageChange\n    trend\n  }\n}",
+                "variables": ""
+              }
+            },
+            "url": {
+              "raw": "{{GRAPHQL_ENDPOINT}}",
+              "host": [
+                "{{GRAPHQL_ENDPOINT}}"
+              ]
+            },
+            "description": "**Comparar Períodos - Nov vs Dic 2024**\n\n🎯 **Objetivo:** Comparación de CO2 entre meses\n\n**Trends:**\n- IMPROVING: CO2 bajó\n- STABLE: Sin cambio significativo\n- WORSENING: CO2 subió\n\n**ADDED IN v2.0.0** - Este tipo es nuevo"
+          },
+          "response": []
+        },
+        {
+          "name": "Test 5 - Filtrar por Impact Level (CRITICAL)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"Response has transactionsByImpact\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.data).to.exist;",
+                  "    pm.expect(jsonData.data.transactionsByImpact).to.be.an('array');",
+                  "});",
+                  "",
+                  "pm.test(\"All transactions are CRITICAL\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    var transactions = jsonData.data.transactionsByImpact;",
+                  "    transactions.forEach(function(txn) {",
+                  "        pm.expect(txn.carbonFootprint.impactLevel).to.eql('CRITICAL');",
+                  "    });",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "graphql",
+              "graphql": {
+                "query": "{\n  transactionsByImpact(accountId: \"account-001\", impactLevel: CRITICAL) {\n    merchantName\n    carbonFootprint {\n      co2Kg\n      impactLevel\n    }\n  }\n}",
+                "variables": ""
+              }
+            },
+            "url": {
+              "raw": "{{GRAPHQL_ENDPOINT}}",
+              "host": [
+                "{{GRAPHQL_ENDPOINT}}"
+              ]
+            },
+            "description": "**Filtrar por Impact Level - CRITICAL**\n\n🎯 **Objetivo:** Ver solo transacciones de alto impacto\n\n**Caso de uso:**\n- Dashboard de alertas\n- Reportes para compliance\n- Identificar oportunidades de reducción"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "3️⃣ MUTATIONS",
+      "item": [
+        {
+          "name": "Test 6 - Crear Transaction (genera Alert)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"Mutation was successful\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.data.createTransaction.success).to.be.true;",
+                  "});",
+                  "",
+                  "pm.test(\"Transaction was created\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.data.createTransaction.transaction).to.exist;",
+                  "    pm.expect(jsonData.data.createTransaction.transaction.id).to.exist;",
+                  "});",
+                  "",
+                  "pm.test(\"Carbon footprint calculated\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    var footprint = jsonData.data.createTransaction.transaction.carbonFootprint;",
+                  "    pm.expect(footprint).to.exist;",
+                  "    pm.expect(footprint.co2Kg).to.be.above(0);",
+                  "});",
+                  "",
+                  "pm.test(\"Impact is CRITICAL (aviation)\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    var footprint = jsonData.data.createTransaction.transaction.carbonFootprint;",
+                  "    pm.expect(footprint.impactLevel).to.eql('CRITICAL');",
+                  "});",
+                  "",
+                  "pm.test(\"Carbon alert was generated\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.data.createTransaction.carbonAlert).to.exist;",
+                  "    pm.expect(jsonData.data.createTransaction.carbonAlert.severity).to.eql('CRITICAL');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "graphql",
+              "graphql": {
+                "query": "mutation {\n  createTransaction(input: {\n    accountId: \"account-001\"\n    amount: 3000\n    currency: \"USD\"\n    merchantName: \"Lufthansa\"\n    merchantCategory: TRAVEL_AVIATION\n    date: \"2024-12-05\"\n  }) {\n    success\n    message\n    transaction {\n      id\n      carbonFootprint {\n        co2Kg\n        impactLevel\n      }\n    }\n    carbonAlert {\n      severity\n      message\n    }\n  }\n}",
+                "variables": ""
+              }
+            },
+            "url": {
+              "raw": "{{GRAPHQL_ENDPOINT}}",
+              "host": [
+                "{{GRAPHQL_ENDPOINT}}"
+              ]
+            },
+            "description": "**Crear Transaction - Genera Carbon Alert**\n\n🎯 **Objetivo:** Crear vuelo → genera alert CRITICAL\n\n**Input:**\n- Merchant: Lufthansa\n- Category: TRAVEL_AVIATION\n- Amount: $3000\n\n**Flow:**\n1. Crear transacción\n2. Calcular carbon footprint\n3. Si CRITICAL → generar CarbonAlert\n4. Retornar todo\n\n**Expected:**\n- impactLevel: CRITICAL (aviación = alto CO2)\n- carbonAlert.severity: CRITICAL"
+          },
+          "response": []
+        },
+        {
+          "name": "Purchase Carbon Offset (NEW API)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"Offset purchase successful\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.data.purchaseCarbonOffset.success).to.be.true;",
+                  "});",
+                  "",
+                  "pm.test(\"Has detailed response (not legacy)\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    var response = jsonData.data.purchaseCarbonOffset;",
+                  "    pm.expect(response).to.have.property('offsetCost');",
+                  "    pm.expect(response).to.have.property('co2Offset');",
+                  "    pm.expect(response).to.have.property('certificateId');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "graphql",
+              "graphql": {
+                "query": "mutation {\n  purchaseCarbonOffset(transactionId: \"txn-001\") {\n    success\n    message\n    offsetCost\n    co2Offset\n    certificateId\n  }\n}",
+                "variables": ""
+              }
+            },
+            "url": {
+              "raw": "{{GRAPHQL_ENDPOINT}}",
+              "host": [
+                "{{GRAPHQL_ENDPOINT}}"
+              ]
+            },
+            "description": "**Purchase Carbon Offset - NEW API (v2.0.0)**\n\n✅ **Este es el endpoint RECOMENDADO**\n\n**Comparación:**\n```graphql\n# DEPRECATED (v1)\nbuyOffset(transactionId: ID!): Boolean\n\n# NUEVO (v2) ✅\npurchaseCarbonOffset(transactionId: ID!): CarbonOffsetResponse!\n```\n\n**Ventajas del nuevo:**\n- Respuesta detallada (no solo Boolean)\n- Costo del offset\n- CO2 compensado\n- ID de certificado"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "4️⃣ BONUS - ESG & Deprecated Fields",
+      "item": [
+        {
+          "name": "Merchant ESG Score",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"Response has ESG score\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    if (jsonData.data.merchantESG) {",
+                  "        pm.expect(jsonData.data.merchantESG.overall).to.be.within(0, 100);",
+                  "    }",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "graphql",
+              "graphql": {
+                "query": "{\n  merchantESG(merchantName: \"Whole Foods\") {\n    overall\n    environmental\n    social\n    governance\n    lastUpdated\n    certifications\n  }\n}",
+                "variables": ""
+              }
+            },
+            "url": {
+              "raw": "{{GRAPHQL_ENDPOINT}}",
+              "host": [
+                "{{GRAPHQL_ENDPOINT}}"
+              ]
+            },
+            "description": "**Merchant ESG Score**\n\n🎯 **Objetivo:** Consultar score ESG de un merchant\n\n**ESG = Environmental, Social, Governance**\n\nScore 0-100 por categoría:\n- Environmental: Impacto ambiental\n- Social: Prácticas laborales\n- Governance: Transparencia\n\n**Caso de uso:** Ayudar usuarios a elegir merchants sustentables"
+          },
+          "response": []
+        },
+        {
+          "name": "Using DEPRECATED field (category)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"Deprecated field still works\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    var txn = jsonData.data.transactions[0];",
+                  "    // Legacy field still returns data",
+                  "    pm.expect(txn.category).to.exist;",
+                  "});",
+                  "",
+                  "pm.test(\"New field also works\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    var txn = jsonData.data.transactions[0];",
+                  "    pm.expect(txn.merchantCategory).to.exist;",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "graphql",
+              "graphql": {
+                "query": "{\n  transactions(accountId: \"account-001\") {\n    id\n    merchantName\n    # DEPRECATED - use merchantCategory\n    category\n    # NEW - type-safe enum\n    merchantCategory\n  }\n}",
+                "variables": ""
+              }
+            },
+            "url": {
+              "raw": "{{GRAPHQL_ENDPOINT}}",
+              "host": [
+                "{{GRAPHQL_ENDPOINT}}"
+              ]
+            },
+            "description": "**Using DEPRECATED field - category**\n\n⚠️ **Este query usa un campo DEPRECATED**\n\n```graphql\ntype Transaction {\n  category: String @deprecated(reason: \"Use merchantCategory\")\n  merchantCategory: MerchantCategory!  # ← NUEVO\n}\n```\n\n**¿Por qué deprecamos category?**\n- String no es type-safe\n- Enum previene typos\n- Mejor autocompletado en IDEs\n\n**Migration:**\n```graphql\n# ANTES (v1)\ncategory: \"TRAVEL_AVIATION\"\n\n# DESPUÉS (v2)\nmerchantCategory: TRAVEL_AVIATION\n```"
+          },
+          "response": []
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "GRAPHQL_ENDPOINT",
+      "value": "http://localhost:8080/graphql",
+      "type": "string"
+    }
+  ]
+}
