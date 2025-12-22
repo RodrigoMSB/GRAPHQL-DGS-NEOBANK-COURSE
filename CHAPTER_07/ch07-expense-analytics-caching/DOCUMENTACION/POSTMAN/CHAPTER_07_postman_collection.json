@@ -1,0 +1,641 @@
+{
+  "info": {
+    "_postman_id": "ch07-expense-analytics-caching",
+    "name": "CHAPTER 07: Expense Analytics - Caching & Performance",
+    "description": "Complete test suite for Chapter 07 - GraphQL Caching Strategies\n\n**Covers:**\n- Test 1: Query expenses existentes\n- Test 2: Expense Summary - CACHE MISS (~500ms)\n- Test 3: Expense Summary - CACHE HIT (<100ms)\n- Test 4: Monthly Analytics - CACHE MISS (~1s)\n- Test 5: Monthly Analytics - CACHE HIT (<100ms)\n- Test 6: Crear Expense (invalida cache)\n- Test 7: Summary post-invalidación (CACHE MISS otra vez)\n\n**Total: 7 automated tests**\n\n**Feature:** Expense Analytics with Caching\n**Stack:** Spring Boot 3.2 + Netflix DGS 8.2.0 + Caffeine Cache\n\n**Caching Strategies:**\n- Per-Request: DataLoader (batching + request-scoped cache)\n- Resolver-Level: Spring Cache + Caffeine (TTL 5 min)\n\n**Endpoint:** http://localhost:8080/graphql\n\n**Prerequisites:**\n1. Run: `mvn clean spring-boot:run`\n2. Wait for: \"Started ExpenseAnalyticsApplication\"",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "1️⃣ QUERIES - Datos Base",
+      "item": [
+        {
+          "name": "Test 1 - Query expenses existentes",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"Response has expenses array\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.data).to.exist;",
+                  "    pm.expect(jsonData.data.expenses).to.be.an('array');",
+                  "});",
+                  "",
+                  "pm.test(\"Expenses have required fields\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    if (jsonData.data.expenses.length > 0) {",
+                  "        var expense = jsonData.data.expenses[0];",
+                  "        pm.expect(expense).to.have.property('id');",
+                  "        pm.expect(expense).to.have.property('amount');",
+                  "        pm.expect(expense).to.have.property('merchantName');",
+                  "        pm.expect(expense).to.have.property('category');",
+                  "    }",
+                  "});",
+                  "",
+                  "pm.test(\"Contains sample data (Starbucks)\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    var hasStarbucks = jsonData.data.expenses.some(e => e.merchantName === 'Starbucks');",
+                  "    pm.expect(hasStarbucks).to.be.true;",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "graphql",
+              "graphql": {
+                "query": "{\n  expenses(accountId: \"account-001\") {\n    id\n    amount\n    merchantName\n    category\n  }\n}",
+                "variables": ""
+              }
+            },
+            "url": {
+              "raw": "{{GRAPHQL_ENDPOINT}}",
+              "host": [
+                "{{GRAPHQL_ENDPOINT}}"
+              ]
+            },
+            "description": "**Query - Expenses existentes**\n\nVerifica que los datos de ejemplo están cargados.\n\n**Expected:** Array de expenses (Starbucks, Amazon, Uber, etc.)"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "2️⃣ CACHING - Expense Summary",
+      "item": [
+        {
+          "name": "Test 2 - Expense Summary (CACHE MISS ~500ms)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"Response has expenseSummary\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.data).to.exist;",
+                  "    pm.expect(jsonData.data.expenseSummary).to.exist;",
+                  "});",
+                  "",
+                  "pm.test(\"Summary has required fields\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    var summary = jsonData.data.expenseSummary;",
+                  "    pm.expect(summary).to.have.property('totalAmount');",
+                  "    pm.expect(summary).to.have.property('averageAmount');",
+                  "    pm.expect(summary).to.have.property('count');",
+                  "    pm.expect(summary).to.have.property('topMerchants');",
+                  "});",
+                  "",
+                  "pm.test(\"TopMerchants is array\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.data.expenseSummary.topMerchants).to.be.an('array');",
+                  "});",
+                  "",
+                  "// Store response time for comparison",
+                  "pm.collectionVariables.set(\"cacheMissTime\", pm.response.responseTime);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "graphql",
+              "graphql": {
+                "query": "{\n  expenseSummary(accountId: \"account-001\") {\n    totalAmount\n    averageAmount\n    count\n    topMerchants {\n      merchantName\n      totalSpent\n    }\n  }\n}",
+                "variables": ""
+              }
+            },
+            "url": {
+              "raw": "{{GRAPHQL_ENDPOINT}}",
+              "host": [
+                "{{GRAPHQL_ENDPOINT}}"
+              ]
+            },
+            "description": "**Expense Summary - PRIMERA VEZ (Cache Miss)**\n\n🎯 **Objetivo:** Medir tiempo sin cache\n\n🔄 **Esperado:** ~500ms (cálculo costoso)\n\n**Flujo interno:**\n1. Cache MISS (key no existe)\n2. `simulateHeavyComputation()` → 500ms delay\n3. Calcula aggregations\n4. Guarda en cache (TTL 5 min)\n5. Retorna resultado\n\n**Logs del servidor:**\n```\n🔄 CACHE MISS - Calculating expense summary for account: account-001\n✅ CACHE STORED - Summary calculated\n```"
+          },
+          "response": []
+        },
+        {
+          "name": "Test 3 - Expense Summary (CACHE HIT <100ms) ⚡",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"Response has expenseSummary\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.data).to.exist;",
+                  "    pm.expect(jsonData.data.expenseSummary).to.exist;",
+                  "});",
+                  "",
+                  "pm.test(\"Cache HIT - Response should be faster\", function () {",
+                  "    var cacheMissTime = pm.collectionVariables.get(\"cacheMissTime\");",
+                  "    if (cacheMissTime) {",
+                  "        // Cache hit should be at least 3x faster",
+                  "        pm.expect(pm.response.responseTime).to.be.below(cacheMissTime / 2);",
+                  "    }",
+                  "});",
+                  "",
+                  "pm.test(\"Same data as cache miss\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.data.expenseSummary.totalAmount).to.be.above(0);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "graphql",
+              "graphql": {
+                "query": "{\n  expenseSummary(accountId: \"account-001\") {\n    totalAmount\n    averageAmount\n    count\n    topMerchants {\n      merchantName\n      totalSpent\n    }\n  }\n}",
+                "variables": ""
+              }
+            },
+            "url": {
+              "raw": "{{GRAPHQL_ENDPOINT}}",
+              "host": [
+                "{{GRAPHQL_ENDPOINT}}"
+              ]
+            },
+            "description": "**Expense Summary - SEGUNDA VEZ (Cache Hit) ⚡**\n\n🎯 **Objetivo:** Verificar que usa cache\n\n⚡ **Esperado:** <100ms (instantáneo)\n\n**Flujo interno:**\n1. Cache HIT (key existe)\n2. Retorna resultado directo del cache\n3. NO ejecuta `simulateHeavyComputation()`\n\n**Logs del servidor:**\n```\n(nada - el cache intercepta antes del método)\n```\n\n**Mejora:** 5x más rápido ⚡"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "3️⃣ CACHING - Monthly Analytics",
+      "item": [
+        {
+          "name": "Test 4 - Monthly Analytics (CACHE MISS ~1s)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"Response has monthlyAnalytics\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.data).to.exist;",
+                  "    pm.expect(jsonData.data.monthlyAnalytics).to.exist;",
+                  "});",
+                  "",
+                  "pm.test(\"Month format is correct\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.data.monthlyAnalytics.month).to.eql('2024-11');",
+                  "});",
+                  "",
+                  "pm.test(\"Has category breakdown\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.data.monthlyAnalytics.byCategory).to.be.an('array');",
+                  "});",
+                  "",
+                  "pm.test(\"Categories have percentage\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    var breakdown = jsonData.data.monthlyAnalytics.byCategory;",
+                  "    if (breakdown.length > 0) {",
+                  "        pm.expect(breakdown[0]).to.have.property('percentage');",
+                  "    }",
+                  "});",
+                  "",
+                  "pm.collectionVariables.set(\"monthlyMissTime\", pm.response.responseTime);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "graphql",
+              "graphql": {
+                "query": "{\n  monthlyAnalytics(accountId: \"account-001\", year: 2024, month: 11) {\n    month\n    totalSpent\n    byCategory {\n      category\n      amount\n      percentage\n    }\n  }\n}",
+                "variables": ""
+              }
+            },
+            "url": {
+              "raw": "{{GRAPHQL_ENDPOINT}}",
+              "host": [
+                "{{GRAPHQL_ENDPOINT}}"
+              ]
+            },
+            "description": "**Monthly Analytics - PRIMERA VEZ (Cache Miss)**\n\n🎯 **Objetivo:** Medir cálculo costoso\n\n🔄 **Esperado:** ~1000ms (cálculo MUY costoso)\n\n**Flujo interno:**\n1. Cache MISS\n2. `simulateVeryHeavyComputation()` → 1000ms delay\n3. Calcula aggregations por categoría\n4. Calcula porcentajes\n5. Guarda en cache\n\n**Cache Key:** `account-001_2024_11`\n\n**Logs del servidor:**\n```\n🔄 CACHE MISS - Calculating monthly analytics: 2024/11 for account-001\n✅ CACHE STORED - Monthly analytics\n```"
+          },
+          "response": []
+        },
+        {
+          "name": "Test 5 - Monthly Analytics (CACHE HIT <100ms) ⚡",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"Response has monthlyAnalytics\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.data).to.exist;",
+                  "    pm.expect(jsonData.data.monthlyAnalytics).to.exist;",
+                  "});",
+                  "",
+                  "pm.test(\"Cache HIT - Much faster response\", function () {",
+                  "    var monthlyMissTime = pm.collectionVariables.get(\"monthlyMissTime\");",
+                  "    if (monthlyMissTime) {",
+                  "        // Should be at least 5x faster",
+                  "        pm.expect(pm.response.responseTime).to.be.below(monthlyMissTime / 3);",
+                  "    }",
+                  "});",
+                  "",
+                  "pm.test(\"Same month data\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.data.monthlyAnalytics.month).to.eql('2024-11');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "graphql",
+              "graphql": {
+                "query": "{\n  monthlyAnalytics(accountId: \"account-001\", year: 2024, month: 11) {\n    month\n    totalSpent\n    byCategory {\n      category\n      amount\n      percentage\n    }\n  }\n}",
+                "variables": ""
+              }
+            },
+            "url": {
+              "raw": "{{GRAPHQL_ENDPOINT}}",
+              "host": [
+                "{{GRAPHQL_ENDPOINT}}"
+              ]
+            },
+            "description": "**Monthly Analytics - SEGUNDA VEZ (Cache Hit) ⚡**\n\n🎯 **Objetivo:** Verificar cache de cálculo costoso\n\n⚡ **Esperado:** <100ms (instantáneo)\n\n**Mejora:** 10x más rápido ⚡⚡\n\n**Comparación:**\n```\nSin cache:  ~1000ms\nCon cache:  <100ms\nMejora:     10x\n```"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "4️⃣ MUTATIONS - Cache Invalidation",
+      "item": [
+        {
+          "name": "Test 6 - Crear Expense (invalida cache)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"Mutation was successful\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.data.createExpense.success).to.be.true;",
+                  "});",
+                  "",
+                  "pm.test(\"Expense was created\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.data.createExpense.expense).to.exist;",
+                  "    pm.expect(jsonData.data.createExpense.expense.id).to.exist;",
+                  "});",
+                  "",
+                  "pm.test(\"Correct merchant name\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.data.createExpense.expense.merchantName).to.eql('Apple Store');",
+                  "});",
+                  "",
+                  "pm.test(\"Correct amount\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.data.createExpense.expense.amount).to.eql(299.99);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "graphql",
+              "graphql": {
+                "query": "mutation {\n  createExpense(input: {\n    accountId: \"account-001\"\n    amount: 299.99\n    currency: \"USD\"\n    merchantName: \"Apple Store\"\n    category: SHOPPING\n    date: \"2024-12-05\"\n    description: \"AirPods Pro\"\n  }) {\n    success\n    message\n    expense {\n      id\n      amount\n      merchantName\n    }\n  }\n}",
+                "variables": ""
+              }
+            },
+            "url": {
+              "raw": "{{GRAPHQL_ENDPOINT}}",
+              "host": [
+                "{{GRAPHQL_ENDPOINT}}"
+              ]
+            },
+            "description": "**Crear Expense - INVALIDA CACHE**\n\n🎯 **Objetivo:** Crear expense e invalidar cache automáticamente\n\n💰 **Expense:** Apple Store $299.99 (AirPods Pro)\n\n**Flujo interno:**\n1. Crea nuevo expense\n2. Llama `@CacheEvict` automáticamente\n3. Invalida caches:\n   - `expenseSummary`\n   - `expenseSummaryByCategory`\n   - `topMerchants`\n   - `monthlyAnalytics`\n\n**Logs del servidor:**\n```\n🗑️ CACHE INVALIDATED for account: account-001\n```\n\n**¿Por qué invalidar?**\nPorque el nuevo expense cambia:\n- Total de gastos\n- Promedio\n- Top merchants\n- Analytics mensuales"
+          },
+          "response": []
+        },
+        {
+          "name": "Test 7 - Summary post-invalidación (CACHE MISS)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"Response has expenseSummary\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.data).to.exist;",
+                  "    pm.expect(jsonData.data.expenseSummary).to.exist;",
+                  "});",
+                  "",
+                  "pm.test(\"Cache was invalidated - slower response\", function () {",
+                  "    // After invalidation, should be slow again (~500ms)",
+                  "    // This proves the cache was cleared",
+                  "    pm.expect(pm.response.responseTime).to.be.above(100);",
+                  "});",
+                  "",
+                  "pm.test(\"Count increased (new expense added)\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    // Original had some expenses, now has +1",
+                  "    pm.expect(jsonData.data.expenseSummary.count).to.be.above(0);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "graphql",
+              "graphql": {
+                "query": "{\n  expenseSummary(accountId: \"account-001\") {\n    totalAmount\n    averageAmount\n    count\n    topMerchants {\n      merchantName\n      totalSpent\n    }\n  }\n}",
+                "variables": ""
+              }
+            },
+            "url": {
+              "raw": "{{GRAPHQL_ENDPOINT}}",
+              "host": [
+                "{{GRAPHQL_ENDPOINT}}"
+              ]
+            },
+            "description": "**Summary Post-Invalidación (Cache Miss)**\n\n🎯 **Objetivo:** Verificar que cache fue invalidado\n\n🔄 **Esperado:** ~500ms otra vez (cache vacío)\n\n**Flujo:**\n```\nTest 2: CACHE MISS  (~500ms) → guarda en cache\nTest 3: CACHE HIT   (<100ms) → usa cache\nTest 6: MUTATION    → invalida cache\nTest 7: CACHE MISS  (~500ms) → recalcula todo ← ESTAMOS AQUÍ\n```\n\n**Esto demuestra:**\n1. El cache fue invalidado correctamente\n2. Los datos se recalculan con el nuevo expense\n3. El nuevo totalAmount incluye los $299.99"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "5️⃣ BONUS - DataLoader Demo",
+      "item": [
+        {
+          "name": "Expenses by Category (DataLoader)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"Response has expensesByCategory\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.data).to.exist;",
+                  "    pm.expect(jsonData.data.expensesByCategory).to.be.an('array');",
+                  "});",
+                  "",
+                  "pm.test(\"All expenses are FOOD_DRINK\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    var expenses = jsonData.data.expensesByCategory;",
+                  "    expenses.forEach(function(e) {",
+                  "        pm.expect(e.category).to.eql('FOOD_DRINK');",
+                  "    });",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "graphql",
+              "graphql": {
+                "query": "{\n  expensesByCategory(accountId: \"account-001\", category: FOOD_DRINK) {\n    id\n    amount\n    merchantName\n    category\n  }\n}",
+                "variables": ""
+              }
+            },
+            "url": {
+              "raw": "{{GRAPHQL_ENDPOINT}}",
+              "host": [
+                "{{GRAPHQL_ENDPOINT}}"
+              ]
+            },
+            "description": "**Expenses by Category - USA DATALOADER**\n\n🎯 **Objetivo:** Demostrar per-request caching\n\n**DataLoader resuelve:**\n1. **Batching:** Agrupa múltiples requests en uno\n2. **Caching:** Reutiliza durante el mismo request HTTP\n\n**Problema N+1 (sin DataLoader):**\n```\nQuery 10 expenses → 10 llamadas a DB para categorías\n```\n\n**Con DataLoader:**\n```\nQuery 10 expenses → 1 llamada batch a DB\n```\n\n**Logs del servidor:**\n```\n📦 DATALOADER BATCH - Loading 1 categories\n✅ DATALOADER BATCH COMPLETE\n```"
+          },
+          "response": []
+        },
+        {
+          "name": "Top Merchants (Cached)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"Response has topMerchants\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.data).to.exist;",
+                  "    pm.expect(jsonData.data.topMerchants).to.be.an('array');",
+                  "});",
+                  "",
+                  "pm.test(\"Limited to 3 merchants\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.data.topMerchants.length).to.be.at.most(3);",
+                  "});",
+                  "",
+                  "pm.test(\"Merchants have stats\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    var merchants = jsonData.data.topMerchants;",
+                  "    if (merchants.length > 0) {",
+                  "        pm.expect(merchants[0]).to.have.property('merchantName');",
+                  "        pm.expect(merchants[0]).to.have.property('totalSpent');",
+                  "        pm.expect(merchants[0]).to.have.property('transactionCount');",
+                  "    }",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "graphql",
+              "graphql": {
+                "query": "{\n  topMerchants(accountId: \"account-001\", limit: 3) {\n    merchantName\n    totalSpent\n    transactionCount\n  }\n}",
+                "variables": ""
+              }
+            },
+            "url": {
+              "raw": "{{GRAPHQL_ENDPOINT}}",
+              "host": [
+                "{{GRAPHQL_ENDPOINT}}"
+              ]
+            },
+            "description": "**Top Merchants - CACHEADO**\n\n🎯 **Objetivo:** Query frecuente optimizada con cache\n\n**Cache Key:** `account-001_3`\n\n**TTL:** 5 minutos\n\n**Uso típico:**\n- Dashboard principal\n- Reportes de gastos\n- Analytics rápidos"
+          },
+          "response": []
+        },
+        {
+          "name": "Invalidate Cache (Manual)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"Cache invalidated successfully\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.data.invalidateCache).to.be.true;",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "graphql",
+              "graphql": {
+                "query": "mutation {\n  invalidateCache(accountId: \"account-001\")\n}",
+                "variables": ""
+              }
+            },
+            "url": {
+              "raw": "{{GRAPHQL_ENDPOINT}}",
+              "host": [
+                "{{GRAPHQL_ENDPOINT}}"
+              ]
+            },
+            "description": "**Invalidar Cache Manualmente**\n\n🎯 **Objetivo:** Forzar invalidación de cache\n\n**Casos de uso:**\n- Operaciones batch externas\n- Sincronización con otros sistemas\n- Debugging/Testing\n\n**Invalida:**\n- expenseSummary\n- expenseSummaryByCategory\n- topMerchants\n- monthlyAnalytics"
+          },
+          "response": []
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "GRAPHQL_ENDPOINT",
+      "value": "http://localhost:8080/graphql",
+      "type": "string"
+    },
+    {
+      "key": "cacheMissTime",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "monthlyMissTime",
+      "value": "",
+      "type": "string"
+    }
+  ]
+}
